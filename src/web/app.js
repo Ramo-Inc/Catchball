@@ -160,7 +160,7 @@
         memb ? el('span', { class: 'st-off' }, memb) : el('span', { class: online ? 'st-on' : 'st-off' }, online ? '● 接続中' : '○ 切断中'),
         m.membership === 'joined' ? el('span', {}, ar) : null,
         m.pending_count ? el('span', {}, `未取得 ${m.pending_count}`) : null),
-      m.reason && m.membership === 'joined' ? el('div', { class: 'm-reason' }, m.reason) : null,
+      m.reason && m.membership === 'joined' && !(m.auto_receive === 'unverified' && m.connection === 'online' && m.activity === 'unknown') ? el('div', { class: 'm-reason' }, m.reason) : null,
       selected ? el('div', { class: 'm-id' }, `固定ID: ${m.id}`) : null,
     );
   }

@@ -86,6 +86,44 @@ export class Core {
     });
   }
 
+  // 会話の中から「参加して」と頼まれたときの参加（トークンファイルなしで起動したブリッジ用）。
+  // 参加用のキーはブリッジがこの PC のデータフォルダーから読む。同じ固定 ID が接続中なら断る。
+  selfJoin(o: { provider: unknown; agent_id?: unknown; display_name: unknown; role: unknown; conversation_id?: unknown; coordinator?: unknown }) {
+    const provider = o.provider === 'claude' ? 'claude' : o.provider === 'codex' ? 'codex' : null;
+    if (!provider) throw new ApiError('INVALID_ARGUMENT', 400, 'provider は codex か claude です。');
+    normalizeName(o.display_name);
+    normalizeRole(o.role);
+    const conv = typeof o.conversation_id === 'string' ? o.conversation_id.trim() : '';
+    let agentId: string;
+    if (o.agent_id != null && o.agent_id !== '') agentId = checkAgentId(o.agent_id);
+    else {
+      let n = 1;
+      while (this.participant(`${provider}-${n}`)) n++;
+      agentId = `${provider}-${n}`;
+    }
+    const token = this.db.tx(() => {
+      const p = this.participant(agentId);
+      if (p) {
+        if (p.provider !== provider) throw new ApiError('INVALID_ARGUMENT', 400, `${agentId} は ${p.provider} 用の ID です。別の ID を指定してください。`);
+        if (this.isOnline(p)) throw new ApiError('AGENT_IN_USE', 409, `${agentId} は別のセッションが接続中です。`, '別の固定 ID（agent_id）を指定してください。');
+        if (conv) this.db.run('UPDATE participants SET conversation_id = ? WHERE agent_id = ?', conv, agentId);
+        if (o.coordinator === true) this.db.run("UPDATE participants SET duty = 'coordinator' WHERE agent_id = ?", agentId);
+        this.revokeCredentials('agent', agentId, 'self_join');
+      } else {
+        this.db.run('INSERT INTO participants (agent_id, channel_id, provider, duty, conversation_id, receiver_kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          agentId, this.cfg.channel_id, provider, o.coordinator === true ? 'coordinator' : 'worker', conv, provider === 'codex' ? 'codex_queue' : 'claude_channel', this.now());
+        this.db.run('INSERT INTO notify_state (agent_id) VALUES (?)', agentId);
+      }
+      // Codex は会話 ID がないと通知（codex queue）を届けられない
+      const missing = provider === 'codex' && !(conv || this.participant(agentId)!.conversation_id);
+      this.db.run('UPDATE participants SET receiver_state = ?, receiver_detail = ? WHERE agent_id = ?',
+        missing ? 'not_configured' : 'unverified', missing ? '会話 ID が未登録です（channel_join の conversation_id に $CODEX_THREAD_ID を指定）' : null, agentId);
+      return this.createCredential('agent', agentId);
+    });
+    const agent = this.participant(agentId)!;
+    return { token, agent_id: agentId, provider, duty: agent.duty, ...this.join(agent, o.display_name, o.role) };
+  }
+
   participant(id: string): Row | undefined {
     return this.db.get('SELECT * FROM participants WHERE agent_id = ?', id);
   }
@@ -284,7 +322,7 @@ export class Core {
       let receiver = p.receiver_state, detail = p.receiver_detail;
       if (info.provider && info.provider !== p.provider) { receiver = 'not_configured'; detail = `トークンファイルの provider（${info.provider}）が登録（${p.provider}）と違います`; }
       else if (receiver === 'verified' && p.receiver_verified_generation !== gen) receiver = 'unverified';
-      else if (receiver === 'not_configured') { receiver = 'unverified'; detail = null; }
+      else if (receiver === 'not_configured' && !(p.provider === 'codex' && !p.conversation_id)) { receiver = 'unverified'; detail = null; }
       this.db.run(`UPDATE participants SET conn_generation = ?, conn_state = 'online', connected_at = ?, last_seen_at = ?, bridge_info = ?,
         receiver_state = ?, receiver_detail = ? WHERE agent_id = ?`,
         gen, this.now(), this.now(), JSON.stringify({ version: info.bridge_version, pid: info.pid }), receiver, detail, p.agent_id);
@@ -376,7 +414,7 @@ export class Core {
           pending: views.filter(v => v.state === 'pending').length,
           cancelled: views.filter(v => v.state === 'cancelled_left').length,
           attention: views.filter(v => v.ui_state === 'attention').length,
-          note: first ? `${first.recipient_id}は${first.detail.replace(/^.*?（(.*)）$/, '$1')}` : null,
+          note: first ? `${first.recipient_display_name}は${first.detail.replace(/^.*?（(.*)）$/, '$1')}` : null,
         },
         deliveries: views,
       };
