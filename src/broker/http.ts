@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Core } from './core.js';
 import { Notifier } from './notifier.js';
 import { ApiError } from '../shared/validation.js';
+import { safeEqualHex, sha256 } from '../shared/ids.js';
 
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
 const UI_SESSION_TTL = 7 * 24 * 3600 * 1000;
@@ -30,7 +31,7 @@ export function lanHostAllowed(hostHeader: string, port: number, extra: string[]
 const isUiRoute = (method: string, path: string) =>
   path.startsWith('/api/ui/') || (method === 'GET' && (path === '/api/health' || path === '/api/members' || path.startsWith('/api/messages')));
 
-export function createBroker(core: Core, notifier: Notifier, log: (s: string) => void = () => {}, surface: Surface = 'local'): Server {
+export function createBroker(core: Core, notifier: Notifier, log: (s: string) => void = () => {}, surface: Surface = 'local', joinKeyHash: string | null = null): Server {
   const port = surface === 'local' ? core.cfg.port : core.cfg.ui.port;
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
@@ -50,6 +51,20 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
 
   const routes: Record<string, (c: Ctx, m: RegExpMatchArray) => unknown> = {
     // ---- AI 向け ----
+    // 会話の中から参加する（トークンファイルなしで起動したブリッジが、この PC の参加用キーで呼ぶ）
+    'POST /api/join/self': c => {
+      if (!joinKeyHash || !c.token || !safeEqualHex(sha256(c.token), joinKeyHash)) {
+        throw new ApiError('UNAUTHENTICATED', 401, '参加用のキーが正しくありません。', 'ブローカーと同じ PC・同じユーザーで起動しているか確認してください。');
+      }
+      const r = core.selfJoin(c.body);
+      log(`self-join ${r.agent_id}（${r.provider}）${r.self.display_name}`);
+      // 参加した直後に自動受信を確認する（ブリッジが接続するのを待ってから）
+      setTimeout(() => {
+        const p = core.participant(r.agent_id);
+        if (p && core.isOnline(p) && p.receiver_state !== 'not_configured') notifier.probe(r.agent_id).catch(() => {});
+      }, 8000).unref();
+      return r;
+    },
     'POST /api/agent/connect': c => core.connect(core.agentFromToken(c.token), c.body),
     'POST /api/agent/heartbeat': c => {
       const a = core.agentFromToken(c.token);
@@ -162,7 +177,7 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
         return sendJson(res, 421, { error: { code: 'FORBIDDEN', message: 'Host が許可されていません。', hint: surface === 'lan' ? 'IP アドレスか PC 名で開くか、config.json の ui.allowed_hosts に名前を追加してください。' : undefined } });
       }
       const origin = req.headers.origin;
-      const isAgentApi = url.pathname.startsWith('/api/agent/') || url.pathname.startsWith('/api/admin/');
+      const isAgentApi = url.pathname.startsWith('/api/agent/') || url.pathname.startsWith('/api/admin/') || url.pathname.startsWith('/api/join/');
       if (origin && (isAgentApi || !originOk(origin, host))) throw new ApiError('FORBIDDEN', 403, 'このオリジンからは利用できません。');
       if (req.method === 'GET' && !url.pathname.startsWith('/api/')) {
         if (serveStatic(res, url.pathname)) return;

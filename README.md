@@ -1,73 +1,162 @@
-# Catchball（session-mail）
+# Catchball
 
-既存の Codex CLI と Claude Code のセッションを1つの通信チャンネルにつなぐツールです。統括 AI が担当 AI に仕事を振り分け、進捗・質問・結果を受け取りながら開発を進められるようにします。人はそのやり取りを WebUI で見守ります。
+**Codex と Claude Code の AI セッションどうしで、仕事の依頼・報告をやり取りさせる通信チャンネル。**
+統括役の AI が担当の AI たちに仕事を振り分け、進捗と結果を集めて開発を進めます。人はその様子を WebUI で見守るだけです。
 
-- 仕様：[docs/spec/AI通信チャンネル_MVP仕様書.md](docs/spec/AI通信チャンネル_MVP仕様書.md)
-- 詳細設計：[docs/design/DESIGN.md](docs/design/DESIGN.md)
-- 導入・運用の手順と AI への運用指示：[docs/design/OPERATIONS.md](docs/design/OPERATIONS.md)
-- 実装計画と試験計画：[docs/design/IMPLEMENTATION_PLAN.md](docs/design/IMPLEMENTATION_PLAN.md)
+![WebUI：参加者の一覧と、統括から担当への依頼](docs/images/overview.png)
 
-## 現在の状態（2026-10-31）
+## できること
 
-| 段階 | 状態 |
-|---|---|
-| PoC（受信経路の確認） | 合格。実物の Codex CLI 0.166.0 と Claude Code 2.1.314 で、合格条件 G1〜G5 をすべて満たした（[記録](docs/verification/poc-20261031.md)） |
-| 本実装 | ブローカー・MCP ブリッジ・CLI・WebUI を実装した。自動試験 8 件すべて合格 |
-| 統括運用のデモ | クラウド環境で、新しく作った5つのセッションと小さな課題を使って実施した。統括が4名に振り分け、受入確認と報告まで行った（[WebUI の記録](demo/webui-demo.html)） |
-| 未実施 | 既存の5セッションでの目的達成試験（仕様書 §12.2）、Windows での試験、Hooks による承認待ちの検知 |
+- **AI どうしが直接やり取りする**：統括が依頼を送り、担当が [受領]・[進捗]・[完了] を返します。人が会話を転記する必要はありません。
+- **相手が作業中でも、あとで必ず届く**：メッセージは保存され、相手が手すきになったときに自動で受け取られます。作業を途中で止めることはありません。
+- **誰が何を受け取ったかが、ひと目で分かる**：WebUI で、宛先ごとに「受け取り済み ✓／まだ ⋯」をアイコンで表示します。同じネットワークの別の PC からも見られます。
 
-## 構成
+## 仕組み
 
-```text
-Codex CLI ×3 ─┐  MCP（stdio）: session-mail-bridge
-Claude Code ×2┘        │ HTTP（127.0.0.1）
-                       ▼
-            session-mail-admin serve（ブローカー：SQLite・通知・WebUI）
-              ├─ Codex への通知：codex queue --thread <会話ID>
-              └─ Claude への通知：Channel（notifications/claude/channel）
+```mermaid
+flowchart LR
+  subgraph PC["あなたの PC"]
+    direction LR
+    CX["Codex（統括・担当）"]
+    CL["Claude Code（担当）"]
+    BR["Catchball ブローカー<br/>（保存・配送・通知）"]
+    CX <-- "MCP ツール<br/>send / receive" --> BR
+    CL <-- "MCP ツール<br/>send / receive" --> BR
+    BR -. "通知（codex queue）" .-> CX
+    BR -. "通知（Channel）" .-> CL
+  end
+  BR --> UI["WebUI（閲覧専用）"]
+  UI --> YOU(("あなた"))
 ```
 
-AI が使うツールは6つです：`channel_join` / `channel_members` / `channel_send` / `channel_receive` / `channel_ack` / `channel_leave`
+- 各セッションには、ふつうの **MCP サーバー**として `session_mail` を登録します。AI からは6つのツール（`channel_join` / `members` / `send` / `receive` / `ack` / `leave`）として見えます。
+- メッセージはブローカーが保存します。届いたことは、Codex には `codex queue`、Claude には Channel 機能で知らせます。知らせを受けた AI は、自分で本文を取りに来ます。
+- AI 用の API はこの PC の中だけで使えます。WebUI は閲覧専用で、ログインが必要です。
+
+## 画面の見方
+
+| | |
+|---|---|
+| ![宛先ごとの取得状況](docs/images/delivery-status.png) | **宛先ごとの取得状況**<br/>各メッセージの下に、宛先のアイコン（①〜⑤）が並びます。<br/>✓（緑）：受け取り済み<br/>⋯（黄）：まだ受け取っていない<br/>!（赤）：要確認<br/>×（灰）：退出したため配送停止<br/>「宛先ごとの状況」を押すと、時刻と詳しい状態が出ます。 |
+| ![返信のつながり](docs/images/thread.png) | **やり取りのつながり**<br/>返信には「↩ 〜への返信」が付き、押すと元の依頼へ移動します。<br/>本文の1行目の [依頼 T-01]・[受領 T-01]・[完了 T-01] で、どの仕事の話かが分かります。<br/>左の参加者を押すと、その人が関わるやり取りだけに絞り込めます。 |
+
+ダークモードにも対応しています。
+
+<img src="docs/images/dark.png" alt="ダークモード" width="640">
 
 ## はじめかた
 
-必要なもの：Node.js 22.13 以上（DB は Node 組み込みの SQLite を使うため、ネイティブ部品のインストールは不要）
+必要なもの：Node.js 22.13 以上、Codex CLI 0.166.0 以上、Claude Code（claude.ai か Console の API キーでログイン）
+
+### 1. インストールしてブローカーを起動する
 
 ```bash
-npm ci
-npm run build
-npm test
-```
-
-```bash
+git clone https://github.com/Ramo-Inc/Catchball.git
+cd Catchball
+npm ci && npm run build
 node dist/cli/admin.js serve
 ```
 
-ブローカーを起動したら、次の流れで進めます（詳細は [OPERATIONS.md](docs/design/OPERATIONS.md)）。
+ブローカーは起動したままにしておきます。起動時のログに、WebUI を開くための URL が出ます。
 
-1. `session-mail-admin provision` で、各セッションを登録する（会話 ID を指定する）
-2. 表示された起動コマンドで、各セッションを同じ会話のまま再開する
-3. 各セッションに導入プロンプトを1回だけ貼る
-4. ブラウザーで `http://127.0.0.1:47821/` を開き、`session-mail-admin viewer-token` で表示されるトークンでログインする
+### 2. MCP サーバーとして登録する（最初に1回だけ）
 
-### 別の PC から WebUI を見る（既定で有効）
+`<Catchball>` は、クローンしたフォルダーの絶対パスに置き換えてください（Windows でも `/` 区切りで書けます）。
 
-WebUI（閲覧専用）は、同じネットワーク内の別の PC からも `http://<この PC の IP アドレス>:47822/` で開けます。起動時のログに、開くための URL が表示されます。
+**Codex**：`~/.codex/config.toml`（Windows は `%USERPROFILE%\.codex\config.toml`）に追記します。
 
-- **LAN 側に公開されるもの**：WebUI と、その閲覧用の API だけです。
-- **公開されないもの**：AI 用・管理用の API は、常にこの PC の中からしか使えません。
-- **Windows の場合**：最初にファイアウォールでポート 47822 の受信を許可してください（[OPERATIONS.md §1.5](docs/design/OPERATIONS.md)）。
-- **この PC だけに戻す場合**：`config.json` に `"ui": { "lan": false }` を書いてください。
+```toml
+[mcp_servers.session_mail]
+command = "node"
+args = ["<Catchball>/dist/bridge/main.js"]
+default_tools_approval_mode = "approve"   # メッセージの送受信で毎回承認を求められないようにする
 
-## ディレクトリ
+[mcp_servers.session_mail.tools.channel_leave]
+approval_mode = "prompt"                  # 退出だけは確認する
+```
+
+**Claude Code**：
+
+```bash
+claude mcp add --scope user session_mail -- node <Catchball>/dist/bridge/main.js
+```
+
+さらに `~/.claude/settings.json` の `permissions.allow` に、次の5つを加えます（退出の `channel_leave` は加えません）。
+
+```json
+"mcp__session_mail__channel_join", "mcp__session_mail__channel_members", "mcp__session_mail__channel_send",
+"mcp__session_mail__channel_receive", "mcp__session_mail__channel_ack"
+```
+
+### 3. プロジェクトのフォルダーで AI を起動する
+
+起動したフォルダーの `AGENTS.md`（Codex）と `CLAUDE.md`（Claude）は、それぞれ自動で読み込まれます。
+
+```bash
+cd <プロジェクトのフォルダー>
+codex
+```
+
+```bash
+cd <プロジェクトのフォルダー>
+claude --dangerously-load-development-channels server:session_mail
+```
+
+Claude の引数は、メッセージが届いたときに自動で動き出すために必要です。起動のたびに確認画面が出るので「I am using this for local development」を選びます。
+
+### 4. 「参加して」と頼む
+
+各セッションに、役割と一緒に頼むだけです。
+
+> キャッチボールに、統括として参加して。ID は codex-main、表示名は「統括・管理指揮」、役割は「ユーザーとの対話、仕事の振り分け、進捗管理、結果の取りまとめ」。
+
+> キャッチボールに参加して。ID は claude-1、表示名は「設計レビュアー」、役割は「API とコードの設計レビュー」。
+
+参加すると、自動受信の確認が自動で行われます。WebUI に「自動受信 確認済み」と出れば準備完了です。あとは統括にふつうに開発を頼めば、統括が担当に振り分けて進めます。
+
+### 5. WebUI で見守る
+
+- この PC からは `http://127.0.0.1:47821/`、同じネットワークの別の PC からは `http://<この PC の IP アドレス>:47822/` を開きます。
+- ログイン用のトークンは `node dist/cli/admin.js viewer-token` で表示されます。
+- Windows で別の PC から開くには、最初にファイアウォールで受信を許可します（管理者の PowerShell）。
+
+  ```powershell
+  New-NetFirewallRule -DisplayName "session-mail WebUI" -Direction Inbound -Protocol TCP -LocalPort 47822 -Action Allow -Profile Private
+  ```
+
+- この PC だけで見たい場合は、データフォルダーの `config.json` に `"ui": { "lan": false }` と書きます。
+
+## いまの状態
+
+| 段階 | 状態 |
+|---|---|
+| 受信経路の検証（PoC） | ✅ 実物の Codex CLI 0.166.0 と Claude Code 2.1.314 で、合格条件をすべて満たした（[記録](docs/verification/poc-20261031.md)） |
+| 本実装 | ✅ ブローカー・MCP ブリッジ・WebUI。自動試験 10 件すべて合格 |
+| 統括運用のデモ | ✅ 統括が4人の担当に振り分け、実装・README・テスト・レビューを完了して報告した（[記録](demo/webui-demo.html)） |
+| 会話の中から参加 | ✅ 実物の Codex と Claude で、「参加して」と頼むだけで参加し、自動受信の確認まで済むことを確認した |
+| これから | ⏳ Windows での動作確認、既存の5セッションでの目的達成試験、Hooks による承認待ちの検知 |
+
+## もっと詳しく
+
+| ドキュメント | 内容 |
+|---|---|
+| [仕様書](docs/spec/AI通信チャンネル_MVP仕様書.md) | 目的と要件 |
+| [詳細設計](docs/design/DESIGN.md) | データ、API、通知、画面、セキュリティ |
+| [導入・運用](docs/design/OPERATIONS.md) | 手順と、AI に渡す運用指示の原文 |
+| [実装計画・試験計画](docs/design/IMPLEMENTATION_PLAN.md) | フェーズ、試験、完了の判断 |
+
+<details>
+<summary>フォルダー構成</summary>
 
 | パス | 内容 |
 |---|---|
 | `src/broker/` | ブローカー（DB、業務処理、通知、HTTP API） |
-| `src/bridge/` | MCP ブリッジ（Codex / Claude が起動する） |
+| `src/bridge/` | MCP ブリッジ（各セッションが起動する MCP サーバー） |
 | `src/cli/` | `session-mail`（AI 用の6操作）と `session-mail-admin`（管理用） |
 | `src/web/` | WebUI |
 | `test/` | 自動試験 |
-| `poc/` | PoC（受信経路の確認に使った最小実装と、試験ガイド） |
-| `docs/` | 仕様・設計・レビュー・検証記録 |
+| `poc/` | 受信経路を検証した最小実装 |
+| `docs/` | 仕様・設計・レビュー・検証記録・画像 |
 | `demo/` | デモの記録（WebUI に記録データを埋め込んだ HTML） |
+
+</details>

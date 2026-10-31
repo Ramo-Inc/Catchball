@@ -3,6 +3,8 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { hostname, networkInterfaces } from 'node:os';
+import { randomBytes } from 'node:crypto';
+import { sha256 } from '../shared/ids.js';
 import { Db } from '../broker/db.js';
 import { Core } from '../broker/core.js';
 import { Notifier } from '../broker/notifier.js';
@@ -79,7 +81,11 @@ async function main(): Promise<number> {
       const notifier = new Notifier(core, log);
       core.onSent = () => notifier.tick();
       notifier.start();
-      const server = createBroker(core, notifier, log);
+      // 会話の中から参加するための参加用キー（この PC・このユーザーだけが読めるファイル）
+      const joinKeyPath = join(dir(), 'tokens', 'join.key');
+      if (!existsSync(joinKeyPath)) writeSecret('join.key', randomBytes(32).toString('base64url'));
+      const joinKeyHash = sha256(readFileSync(joinKeyPath, 'utf8').trim());
+      const server = createBroker(core, notifier, log, 'local', joinKeyHash);
       server.listen(cfg.port, '127.0.0.1', () => {
         log(`session-mail ブローカー起動 http://127.0.0.1:${cfg.port}/ （データ: ${dataDir()}）`);
         log(`WebUI のログイン用トークン: session-mail-admin viewer-token で表示できます`);

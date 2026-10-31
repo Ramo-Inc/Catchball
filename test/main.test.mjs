@@ -227,3 +227,47 @@ test('LAN 向け WebUI：閲覧だけ公開し、AI 用・管理用の API は�
   assert.ok(Array.isArray(msgs.data.messages));
   assert.equal((await lanReq('POST', '/api/ui/login', H, { origin: `http://${H}`, body: { token: 'wrong' } })).status, 401);
 });
+
+test('会話の中から参加：トークンファイルなしで起動し、channel_join で参加する', async () => {
+  const startUnbound = async (provider, onChannel) => {
+    const e = { ...env, SESSION_MAIL_PROVIDER: provider };
+    delete e.SESSION_MAIL_TOKEN_FILE;
+    const t = new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'dist/bridge/main.js')], env: e, stderr: 'pipe' });
+    const c = new Client({ name: provider === 'claude' ? 'claude-code' : 'codex-mcp-client', version: '0' });
+    c.fallbackNotificationHandler = async n => { if (n.method === 'notifications/claude/channel') onChannel?.(n.params); };
+    await c.connect(t); clients.push(c); return c;
+  };
+  const cx = await startUnbound('codex');
+  const before = JSON.parse((await cx.callTool({ name: 'channel_members', arguments: {} })).content[0].text);
+  assert.equal(before.error.code, 'NOT_JOINED', '参加前は他のツールが使えない');
+
+  const j = await cx.callTool({ name: 'channel_join', arguments: { display_name: '実装担当C', role: 'CLI の実装', agent_id: 'codex-x', conversation_id: 'T-X' } });
+  const jr = JSON.parse(j.content[0].text);
+  assert.equal(jr.agent_id, 'codex-x');
+  assert.match(jr.guide, /担当の運用指示/);
+  const mem = JSON.parse((await cx.callTool({ name: 'channel_members', arguments: {} })).content[0].text);
+  assert.equal(mem.self_id, 'codex-x');
+
+  // 参加の直後に自動受信の確認（probe）が codex queue で届く
+  const call = await until(() => queueCalls().find(c => c[2] === 'T-X'), 15000, '参加後の probe');
+  assert.match(call[4], /接続確認/);
+  await cx.callTool({ name: 'channel_receive', arguments: {} });
+  const me = JSON.parse((await cx.callTool({ name: 'channel_members', arguments: {} })).content[0].text).members.find(m => m.id === 'codex-x');
+  assert.equal(me.auto_receive, 'verified');
+
+  // 同じ固定 ID は、接続中なら別のセッションから使えない
+  const other = await startUnbound('codex');
+  const dup = JSON.parse((await other.callTool({ name: 'channel_join', arguments: { display_name: '別人', role: 'x', agent_id: 'codex-x', conversation_id: 'T-Y' } })).content[0].text);
+  assert.equal(dup.error.code, 'AGENT_IN_USE');
+
+  // Claude は会話 ID なしで参加でき、ID を省略すると自動で割り当てる
+  const events = [];
+  const cl = await startUnbound('claude', p => events.push(p));
+  const cj = JSON.parse((await cl.callTool({ name: 'channel_join', arguments: { display_name: 'レビュー担当2', role: 'レビュー' } })).content[0].text);
+  assert.match(cj.agent_id, /^claude-\d+$/);
+  await until(() => events.find(e => e.meta.kind === 'probe'), 20000, 'Claude への probe');
+
+  // 参加用キーが違えば参加できない
+  const bad = await req('POST', '/api/join/self', { token: 'wrong-key', body: { provider: 'codex', display_name: 'x', role: 'y' } });
+  assert.equal(bad.status, 401);
+});
