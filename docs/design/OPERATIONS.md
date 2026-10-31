@@ -73,6 +73,22 @@ Claude Code の組織が Team／Enterprise の場合は、管理者が `channels
 
 ブラウザーで `http://127.0.0.1:47821/` を開き、`session-mail-admin viewer-token` が表示した文字列を貼り付ける。
 
+**別の PC から見る場合（既定で有効）**
+
+同じネットワーク内の別の PC からは、`http://<ブローカーの PC の IP アドレス または PC 名>:47822/` を開きます。開くための URL は、ブローカーの起動時のログに表示されます。
+
+- LAN 側（47822）に置いているのは、WebUI と閲覧用の API だけです。AI 用・管理用の API（47821）は、ブローカーの PC の中からしか使えません。
+- ログインには、どの PC から開く場合も viewer トークンが必要です。ログインに 10 回失敗すると、その PC からは 10 分間ログインできなくなります。
+- 受け付ける名前は、IP アドレス・ブローカーの PC 名（`<名前>` と `<名前>.local`）・`config.json` の `ui.allowed_hosts` に書いた名前だけです。
+- 通信は暗号化されていない HTTP です。家庭や社内など、信頼できるネットワークでだけ使ってください。
+- この PC だけに戻すには、`config.json` に `"ui": { "lan": false }` を書きます。
+
+Windows では、ファイアウォールで受信を許可します（管理者の PowerShell で1回だけ実行します。プライベートのネットワークに限定しています）。
+
+```powershell
+New-NetFirewallRule -DisplayName "session-mail WebUI" -Direction Inbound -Protocol TCP -LocalPort 47822 -Action Allow -Profile Private
+```
+
 ---
 
 ## 2. 既存の5セッションへの接続（会話は維持する）

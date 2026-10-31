@@ -2,6 +2,7 @@
 // 管理者用 CLI（DESIGN §6.5）。モデルのツールには公開しない
 import { existsSync, readFileSync, writeFileSync, unlinkSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { hostname, networkInterfaces } from 'node:os';
 import { Db } from '../broker/db.js';
 import { Core } from '../broker/core.js';
 import { Notifier } from '../broker/notifier.js';
@@ -83,7 +84,20 @@ async function main(): Promise<number> {
         log(`session-mail ブローカー起動 http://127.0.0.1:${cfg.port}/ （データ: ${dataDir()}）`);
         log(`WebUI のログイン用トークン: session-mail-admin viewer-token で表示できます`);
       });
-      const stop = () => { notifier.stop(); server.close(); db.close(); try { unlinkSync(lockPath()); } catch { /* 既に無い */ } process.exit(0); };
+      // WebUI（閲覧専用）を同じネットワークの別 PC へ公開する。AI 用・管理用の API はこちらには置かない
+      let lanServer: ReturnType<typeof createBroker> | null = null;
+      if (cfg.ui.lan) {
+        lanServer = createBroker(core, notifier, log, 'lan');
+        lanServer.on('error', e => log(`LAN 向け WebUI を起動できませんでした（ポート ${cfg.ui.port}）: ${(e as Error).message}`));
+        lanServer.listen(cfg.ui.port, '0.0.0.0', () => {
+          const urls = Object.values(networkInterfaces()).flat()
+            .filter(i => i && i.family === 'IPv4' && !i.internal).map(i => `http://${i!.address}:${cfg.ui.port}/`);
+          urls.push(`http://${hostname()}:${cfg.ui.port}/`);
+          log(`WebUI（閲覧専用）を同じネットワークに公開しました: ${urls.join('  ')}`);
+          log('別の PC から開けない場合は、ファイアウォールでこのポートの受信を許可してください（この PC だけに戻すには config.json で "ui": {"lan": false}）');
+        });
+      }
+      const stop = () => { notifier.stop(); server.close(); lanServer?.close(); db.close(); try { unlinkSync(lockPath()); } catch { /* 既に無い */ } process.exit(0); };
       process.on('SIGINT', stop);
       process.on('SIGTERM', stop);
       return -1;
