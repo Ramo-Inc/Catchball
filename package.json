@@ -1,0 +1,27 @@
+{
+  "name": "session-mail",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI通信チャンネル MVP：Codex CLI / Claude Code のセッション間で依頼・報告をやり取りし、WebUI で観察する",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "bin": {
+    "session-mail": "dist/cli/session-mail.js",
+    "session-mail-admin": "dist/cli/admin.js",
+    "session-mail-bridge": "dist/bridge/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-web.mjs",
+    "test": "npm run build && node --no-warnings --test test/main.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
+  }
+}
