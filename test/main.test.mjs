@@ -271,3 +271,14 @@ test('会話の中から参加：トークンファイルなしで起動し、ch
   const bad = await req('POST', '/api/join/self', { token: 'wrong-key', body: { provider: 'codex', display_name: 'x', role: 'y' } });
   assert.equal(bad.status, 401);
 });
+
+test('ドキュメント：docs/MCP_TOOLS.md が実際のツールと必須の引数をすべて説明している', async () => {
+  const t = new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'dist/bridge/main.js')], env: { ...env }, stderr: 'pipe' });
+  const c = new Client({ name: 'doc-check', version: '0' });
+  await c.connect(t); clients.push(c);
+  const doc = readFileSync(join(ROOT, 'docs/MCP_TOOLS.md'), 'utf8');
+  for (const tool of (await c.listTools()).tools) {
+    assert.ok(doc.includes(`### ${tool.name}`), `${tool.name} の節がない`);
+    for (const arg of tool.inputSchema.required ?? []) assert.ok(doc.includes(`\`${arg}\``), `${tool.name} の必須の引数 ${arg} の説明がない`);
+  }
+});
