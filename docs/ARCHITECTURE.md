@@ -167,4 +167,4 @@ logs/broker.log      ブローカーのログ
 
 ## 9. 試験
 
-`npm test` で、ビルドしてから `test/main.test.mjs` の 10 件を実行します。一時フォルダーでブローカーを起動し、HTTP と MCP（stdio）から仕様の規則を確かめます。本物の `codex` の代わりに、受け取った引数を記録するだけの `test/fake-codex.mjs` を使います。
+`npm test` で、ビルドしてから `test/main.test.mjs` の 11 件を実行します。最後の1件は、`docs/MCP_TOOLS.md` が実際のツールと必須の引数をすべて説明しているかを確かめます。一時フォルダーでブローカーを起動し、HTTP と MCP（stdio）から仕様の規則を確かめます。本物の `codex` の代わりに、受け取った引数を記録するだけの `test/fake-codex.mjs` を使います。

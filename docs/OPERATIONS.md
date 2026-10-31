@@ -129,6 +129,8 @@ node dist/cli/admin.js provision --agent claude-1 --provider claude --conversati
 
 ## 8. AI に渡している運用指示
 
+ツールの使い方を1枚にまとめたものは [MCP_TOOLS.md](MCP_TOOLS.md) です。AI に読ませるときは、これを渡してください。
+
 AI に渡す文面は `src/shared/text.ts` にあり、ここが正です。
 
 | 文面 | 渡す経路 |

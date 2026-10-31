@@ -4,6 +4,8 @@ Catchball は、Codex CLI と Claude Code のセッションをつなぐ AI エ�
 
 ## まず読むもの
 
+**session_mail のツールを使って作業するだけなら**、[docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) の1枚を読めば始められます。このリポジトリのコードを直す場合は、次の順に読んでください。
+
 1. [docs/README.md](docs/README.md)：ドキュメントの地図と「どれが正か」
 2. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：今の作り
 3. 作業の内容に応じて：[OPERATIONS](docs/OPERATIONS.md) / [REQUIREMENTS](docs/REQUIREMENTS.md) / [DECISIONS](docs/DECISIONS.md) / [ROADMAP](docs/ROADMAP.md)
@@ -15,7 +17,7 @@ Catchball は、Codex CLI と Claude Code のセッションをつなぐ AI エ�
 ```bash
 npm ci
 npm run build    # tsc と WebUI のコピー（dist/ に出力）
-npm test         # build してから test/main.test.mjs を実行（10件）
+npm test         # build してから test/main.test.mjs を実行（11件）
 ```
 
 - 試験は `node --test test/main.test.mjs` のようにファイルを指定します。Node 22 では `node --test test/` のようにフォルダーを指定すると失敗します。
@@ -48,6 +50,7 @@ npm test         # build してから test/main.test.mjs を実行（10件）
 **変更のしかた**
 - 動きを変えたら、試験を追加・更新し、`npm test` が全件通ることを確かめる。
 - AI に渡す文面（`src/shared/text.ts`）や通知のしかたを変えたら、可能なら実物の Codex と Claude で動きを確かめる。Codex は MCP の instructions より通知文に従う傾向がある。
+- ツール（`src/bridge/main.ts`）を追加・変更したら、`docs/MCP_TOOLS.md` も直す（試験11が、ツール名と必須の引数の説明があるかを確かめる）。
 - 動き・設定・API を変えたら、`docs/ARCHITECTURE.md`・`docs/OPERATIONS.md`・`CHANGELOG.md` を更新する。要件の状況が変わったら `docs/REQUIREMENTS.md`、判断をしたら `docs/DECISIONS.md` に追記、作業が片付いたら `docs/ROADMAP.md` を更新する。
 - `docs/spec/`（ユーザーが書いた元の仕様書）は書き換えない。仕様から変えた点は `docs/REQUIREMENTS.md` の「仕様書から変えた点」に書く。
 - `docs/archive/` と `poc/` は履歴なので、直さない。
