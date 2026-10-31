@@ -50,6 +50,15 @@ node dist/cli/admin.js serve
 3. 各セッションに導入プロンプトを1回だけ貼る
 4. ブラウザーで `http://127.0.0.1:47821/` を開き、`session-mail-admin viewer-token` で表示されるトークンでログインする
 
+### 別の PC から WebUI を見る（既定で有効）
+
+WebUI（閲覧専用）は、同じネットワーク内の別の PC からも `http://<この PC の IP アドレス>:47822/` で開けます。起動時のログに、開くための URL が表示されます。
+
+- **LAN 側に公開されるもの**：WebUI と、その閲覧用の API だけです。
+- **公開されないもの**：AI 用・管理用の API は、常にこの PC の中からしか使えません。
+- **Windows の場合**：最初にファイアウォールでポート 47822 の受信を許可してください（[OPERATIONS.md §1.5](docs/design/OPERATIONS.md)）。
+- **この PC だけに戻す場合**：`config.json` に `"ui": { "lan": false }` を書いてください。
+
 ## ディレクトリ
 
 | パス | 内容 |

@@ -22,6 +22,8 @@ export function ensureDataDir(): string {
 
 export interface Config {
   port: number;
+  // WebUI（閲覧専用）を同じネットワーク内の別 PC に公開する設定。AI 用・管理用の API は常にこの PC のみ
+  ui: { lan: boolean; port: number; allowed_hosts: string[] };
   channel_id: string;
   heartbeat_interval_ms: number;
   offline_after_ms: number;
@@ -38,6 +40,7 @@ export interface Config {
 
 export const DEFAULT_CONFIG: Config = {
   port: 47821,
+  ui: { lan: true, port: 47822, allowed_hosts: [] },
   channel_id: 'dev',
   heartbeat_interval_ms: 5000,
   offline_after_ms: 30000,
@@ -58,6 +61,7 @@ export function loadConfig(): Config {
   const user = JSON.parse(readFileSync(p, 'utf8'));
   return {
     ...DEFAULT_CONFIG, ...user,
+    ui: { ...DEFAULT_CONFIG.ui, ...(user.ui ?? {}) },
     notify: { ...DEFAULT_CONFIG.notify, ...(user.notify ?? {}) },
     codex: { ...DEFAULT_CONFIG.codex, ...(user.codex ?? {}) },
     limits: { ...DEFAULT_CONFIG.limits, ...(user.limits ?? {}) },

@@ -14,9 +14,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const HOME = mkdtempSync(join(tmpdir(), 'sm-test-'));
 const PORT = 48100 + Math.floor(Math.random() * 300);
 const BASE = `http://127.0.0.1:${PORT}`;
+const UI_PORT = PORT + 1000;
 const FAKE_LOG = join(HOME, 'fake-codex.log');
 const env = { ...process.env, SESSION_MAIL_HOME: HOME, FAKE_CODEX_LOG: FAKE_LOG };
-writeFileSync(join(HOME, 'config.json'), JSON.stringify({ port: PORT, codex: { command: [process.execPath, join(ROOT, 'test/fake-codex.mjs')] }, notify: { codex_quiet_after_tool_ms: 0 } }));
+writeFileSync(join(HOME, 'config.json'), JSON.stringify({ port: PORT, ui: { lan: true, port: UI_PORT, allowed_hosts: ['monitor.example'] }, codex: { command: [process.execPath, join(ROOT, 'test/fake-codex.mjs')] }, notify: { codex_quiet_after_tool_ms: 0 } }));
 
 const admin = (...a) => execFileSync(process.execPath, ['--no-warnings', join(ROOT, 'dist/cli/admin.js'), ...a], { env, encoding: 'utf8' });
 const tok = id => JSON.parse(readFileSync(join(HOME, 'tokens', `${id}.json`), 'utf8')).token;
@@ -190,4 +191,39 @@ test('MCP ブリッジ：6ツール、Claude には channel 通知、Codex に�
   // 通知の後に受信したので、自動受信は確認済みになる
   const mem = JSON.parse((await cx.callTool({ name: 'channel_members', arguments: {} })).content[0].text);
   assert.equal(mem.members.find(m => m.id === 'sub1').auto_receive, 'verified');
+});
+
+// LAN 側（別 PC から開く WebUI）。Host を自由に指定するため node:http で送る
+function lanReq(method, path, host, { origin, body, cookie } = {}) {
+  return new Promise(res => {
+    const headers = { host };
+    if (origin) headers.origin = origin;
+    if (cookie) headers.cookie = cookie;
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    const r = httpRequest({ host: '127.0.0.1', port: UI_PORT, method, path, headers }, resp => {
+      let data = ''; resp.on('data', c => data += c);
+      resp.on('end', () => { let j; try { j = JSON.parse(data); } catch { j = data; } res({ status: resp.statusCode, data: j, headers: resp.headers }); });
+    });
+    if (body !== undefined) r.write(JSON.stringify(body));
+    r.end();
+  });
+}
+
+test('LAN 向け WebUI：閲覧だけ公開し、AI 用・管理用の API は置かない', async () => {
+  const H = `192.168.1.50:${UI_PORT}`;
+  await until(async () => (await lanReq('GET', '/', H)).status === 200, 5000, 'LAN 側の起動');
+  assert.equal((await lanReq('GET', '/', `monitor.example:${UI_PORT}`)).status, 200, '設定で許可した名前でも開ける');
+  assert.equal((await lanReq('GET', '/', `evil.example:${UI_PORT}`)).status, 421, '許可していない名前は拒否する');
+  assert.equal((await lanReq('GET', '/api/agent/members', H)).status, 404, 'AI 用の API は LAN 側に存在しない');
+  assert.equal((await lanReq('GET', '/api/admin/status', H)).status, 404, '管理用の API も LAN 側に存在しない');
+  assert.equal((await lanReq('GET', '/api/members', H)).status, 401, '閲覧にもログインが必要');
+  const viewer = readFileSync(join(HOME, 'tokens', 'viewer.token'), 'utf8').trim();
+  assert.equal((await lanReq('POST', '/api/ui/login', H, { origin: 'http://evil.example', body: { token: viewer } })).status, 403);
+  const ok = await lanReq('POST', '/api/ui/login', H, { origin: `http://${H}`, body: { token: viewer } });
+  assert.equal(ok.status, 200);
+  const cookie = ok.headers['set-cookie'][0].split(';')[0];
+  const msgs = await lanReq('GET', '/api/messages?limit=5', H, { cookie });
+  assert.equal(msgs.status, 200);
+  assert.ok(Array.isArray(msgs.data.messages));
+  assert.equal((await lanReq('POST', '/api/ui/login', H, { origin: `http://${H}`, body: { token: 'wrong' } })).status, 401);
 });

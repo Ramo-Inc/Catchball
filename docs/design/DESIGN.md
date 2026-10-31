@@ -468,7 +468,8 @@ execFile(cfg.codex.command[0], [...cfg.codex.command.slice(1),
 
 | 項目 | 規則 |
 |---|---|
-| 待受アドレス | `server.listen(port, '127.0.0.1')` に限る（§9） |
+| 待受アドレス | AI 用・管理用・WebUI のすべてを `127.0.0.1:47821` で受ける（§9）。加えて、`ui.lan=true`（既定）なら WebUI と閲覧用の API だけを `0.0.0.0:47822` でも受ける（2026-10-31 追加。AI 用・管理用の API は LAN 側に置かない） |
+| LAN 側の Host・Origin | Host は IP アドレス・自分の PC 名・`ui.allowed_hosts` だけを受け付ける（DNS リバインディング対策）。Origin は `http://<Host>` に一致すること。ログインの失敗は送信元ごとに数え、10 分で 10 回失敗したら 10 分間止める |
 | Host 検証 | `127.0.0.1:{port}` か `localhost:{port}` 以外は 421。DNS リバインディング対策 |
 | Origin 検証 | `/api/agent/*` と `/api/admin/*`：Origin ヘッダーがあれば 403（ブラウザーからは呼ばせない）。WebUI の API：Origin があれば `http://127.0.0.1:{port}` か `http://localhost:{port}` と一致すること。POST では Origin を必須にする |
 | Content-Type | POST は `application/json` を必須にする（415） |

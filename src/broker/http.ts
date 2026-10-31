@@ -1,6 +1,8 @@
 // HTTP API と WebUI の配信（DESIGN §5）
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
+import { hostname } from 'node:os';
+import { isIP } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Core } from './core.js';
@@ -13,10 +15,30 @@ const CSP = "default-src 'none'; script-src 'self'; style-src 'self' https://fon
 
 type Ctx = { req: IncomingMessage; res: ServerResponse; url: URL; body: any; token?: string; cookie?: string };
 
-export function createBroker(core: Core, notifier: Notifier, log: (s: string) => void = () => {}): Server {
-  const port = core.cfg.port;
+// local：この PC だけで待ち受け、すべての API を持つ。lan：同じネットワークの別 PC 向けで、WebUI の閲覧に必要なものだけを持つ
+export type Surface = 'local' | 'lan';
+
+// LAN 側で受け付ける Host 名。IP アドレス・この PC の名前・設定で許可した名前だけ（DNS リバインディング対策）
+export function lanHostAllowed(hostHeader: string, port: number, extra: string[]): boolean {
+  const m = /^(\[[0-9a-fA-F:.]+\]|[^:]+):(\d+)$/.exec(hostHeader);
+  if (!m || Number(m[2]) !== port) return false;
+  const name = m[1].replace(/^\[|\]$/g, '').toLowerCase();
+  const me = hostname().toLowerCase();
+  return isIP(name) !== 0 || name === 'localhost' || name === me || name === `${me}.local` || extra.map(h => h.toLowerCase()).includes(name);
+}
+
+const isUiRoute = (method: string, path: string) =>
+  path.startsWith('/api/ui/') || (method === 'GET' && (path === '/api/health' || path === '/api/members' || path.startsWith('/api/messages')));
+
+export function createBroker(core: Core, notifier: Notifier, log: (s: string) => void = () => {}, surface: Surface = 'local'): Server {
+  const port = surface === 'local' ? core.cfg.port : core.cfg.ui.port;
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
+  const hostOk = (h: string) => surface === 'local' ? allowedHosts.has(h) : lanHostAllowed(h, port, core.cfg.ui.allowed_hosts);
+  // LAN 側の Origin は、開いているページ自身（http://<Host>）だけを認める
+  const originOk = (o: string, h: string) => surface === 'local' ? allowedOrigins.has(o) : o === `http://${h}`;
+  // ログインの総当たり対策：送信元ごとに失敗を数え、10 分で 10 回失敗したら 10 分間止める
+  const failures = new Map<string, { n: number; since: number }>();
 
   const agent = (c: Ctx) => {
     const a = core.agentFromToken(c.token);
@@ -52,9 +74,19 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
     },
 
     // ---- WebUI 向け ----
-    'POST /api/ui/login': c => {
+    'POST /api/ui/login': async c => {
+      const ip = c.req.socket.remoteAddress ?? '?';
+      const f = failures.get(ip);
+      if (f && core.now() - f.since > 600000) failures.delete(ip);
+      if ((failures.get(ip)?.n ?? 0) >= 10) throw new ApiError('TOO_MANY_ATTEMPTS', 429, 'ログインの失敗が続いたため、10 分間ログインできません。');
       try { core.verify(String(c.body.token ?? '').trim(), 'viewer'); }
-      catch { throw new ApiError('UNAUTHENTICATED', 401, 'トークンが正しくありません。session-mail-admin viewer-token で確認してください。'); }
+      catch {
+        const cur = failures.get(ip) ?? { n: 0, since: core.now() };
+        failures.set(ip, { n: cur.n + 1, since: cur.since });
+        await new Promise(r => setTimeout(r, 800));
+        throw new ApiError('UNAUTHENTICATED', 401, 'トークンが正しくありません。session-mail-admin viewer-token で確認してください。');
+      }
+      failures.delete(ip);
       const s = core.createCredential('ui_session', null, UI_SESSION_TTL);
       c.res.setHeader('Set-Cookie', `sm_ui=${s}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${UI_SESSION_TTL / 1000}`);
       return { ok: true };
@@ -124,14 +156,20 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     let status = 200;
     try {
-      if (!allowedHosts.has(req.headers.host ?? '')) { status = 421; return sendJson(res, 421, { error: { code: 'FORBIDDEN', message: 'Host が許可されていません。' } }); }
+      const host = req.headers.host ?? '';
+      if (!hostOk(host)) {
+        status = 421;
+        return sendJson(res, 421, { error: { code: 'FORBIDDEN', message: 'Host が許可されていません。', hint: surface === 'lan' ? 'IP アドレスか PC 名で開くか、config.json の ui.allowed_hosts に名前を追加してください。' : undefined } });
+      }
       const origin = req.headers.origin;
       const isAgentApi = url.pathname.startsWith('/api/agent/') || url.pathname.startsWith('/api/admin/');
-      if (origin && (isAgentApi || !allowedOrigins.has(origin))) throw new ApiError('FORBIDDEN', 403, 'このオリジンからは利用できません。');
+      if (origin && (isAgentApi || !originOk(origin, host))) throw new ApiError('FORBIDDEN', 403, 'このオリジンからは利用できません。');
       if (req.method === 'GET' && !url.pathname.startsWith('/api/')) {
         if (serveStatic(res, url.pathname)) return;
         throw new ApiError('NOT_FOUND', 404, '見つかりません。');
       }
+      // LAN 側には AI 用・管理用の API を置かない（存在しないものとして扱う）
+      if (surface === 'lan' && !isUiRoute(req.method ?? 'GET', url.pathname)) throw new ApiError('NOT_FOUND', 404, 'API が見つかりません。');
       const hit = match(req.method ?? 'GET', url.pathname);
       if (!hit) throw new ApiError('NOT_FOUND', 404, 'API が見つかりません。');
       let body: any = {};
