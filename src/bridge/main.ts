@@ -6,7 +6,8 @@
 // Claude には claude/channel を宣言し、ハートビートの応答に載った通知を Channel 通知として送る。
 // claude/channel/permission は宣言しない（承認をメッセージで中継しない）。stdout は MCP 専用、ログは stderr。
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -14,7 +15,8 @@ import { Duty, Provider, TokenFile, dataDir, loadConfig, readTokenFile } from '.
 import { call } from '../shared/client.js';
 import { COMMON_GUIDE } from '../shared/text.js';
 
-const VERSION = '0.2.0';
+// バージョンは package.json を正とする（dist/bridge/main.js から2つ上）
+const VERSION: string = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8')).version;
 let bound: TokenFile | null = readTokenFile(process.env.SESSION_MAIL_TOKEN_FILE);
 const logErr = (m: string) => process.stderr.write(`[session-mail-bridge ${bound?.agent_id ?? 'unbound'}] ${m}\n`);
 

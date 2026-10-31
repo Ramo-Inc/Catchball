@@ -1,6 +1,6 @@
 {
   "name": "session-mail",
-  "version": "0.1.0",
+  "version": "1.0.0-alpha.1",
   "private": true,
   "type": "module",
   "description": "AI通信チャンネル MVP：Codex CLI / Claude Code のセッション間で依頼・報告をやり取りし、WebUI で観察する",

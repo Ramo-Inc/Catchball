@@ -1,3 +1,5 @@
+-- ⚠ 履歴資料（初期設計のスキーマ）。現在のスキーマの正は src/broker/db.ts の SCHEMA。
+
 -- session-mail MVP スキーマ（SQLite 3.35 以上。RETURNING と部分インデックスを使用）
 -- 接続ごとに必ず設定する PRAGMA（migrate.ts が毎回実行する）:
 --   PRAGMA journal_mode = WAL;

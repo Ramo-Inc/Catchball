@@ -1,3 +1,7 @@
+> **⚠ 履歴資料（2026-10-31 時点の初期設計）。現在の実装とは異なる箇所があります。**
+> 現在の正しい情報は [docs/README.md](../README.md) から辿ってください。このファイルは経緯を確認するためだけに残しています。
+> 主な違い：SQLite は Node 組み込み（better-sqlite3 ではない）／参加は会話の中から channel_join でできる／WebUI は LAN にも公開／Codex への時間ごとの再通知はしない／Hooks 連携（hook-status）は未実装。
+
 # session-mail PoC 手順書（Phase 0：本実装に進むかの判定）
 
 版：PoC 1.0 ／ 作成：2026-10-31

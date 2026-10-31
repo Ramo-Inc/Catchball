@@ -1,3 +1,5 @@
+> **⚠ 履歴資料**：PoC（2026-10-31、合格済み）のときの試験ガイドです。本体の使い方は [docs/OPERATIONS.md](../docs/OPERATIONS.md) を見てください。文中の `../POC_PLAN.md` は `../docs/archive/POC_PLAN-v1.0.md` に移しました。
+
 # PoC 試験ガイド（手元で行う作業）
 
 所要時間：準備 30 分、試験 40 分程度
