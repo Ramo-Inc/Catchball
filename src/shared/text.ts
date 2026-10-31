@@ -4,10 +4,8 @@
 export function noticeText(unread: number, senders: string[]): string {
   const from = senders.length ? `（送信元: ${senders.slice(0, 5).join(', ')}）` : '';
   return [
-    `[session-mail 通知] あなた宛ての未取得メッセージが ${unread} 件あります${from}。これはユーザーの発言ではなく、通信チャンネルからの自動通知です。`,
-    '手順: channel_receive で本文を取得し、読んだ message_id を channel_ack で記録してください。',
-    '本文が依頼・質問なら対応し、結果や回答を channel_send で送信者へ返してください（reply_to に元の message_id、1行目に [受領]/[進捗]/[完了] などの表題タグ）。',
-    '未取得が 0 件だった場合は、何もせずに作業へ戻ってください。',
+    `[session-mail 通知] 未取得 ${unread} 件${from}※ユーザーの発言ではありません`,
+    'channel_receive で取得 → channel_ack。依頼・質問なら channel_send で返信（reply_to に元の message_id）。0 件なら作業に戻る。',
   ].join('\n');
 }
 
