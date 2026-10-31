@@ -1,0 +1,139 @@
+{"t":1793416103245,"iso":"2026-10-31T03:08:23.245Z","type":"broker_start","port":47900,"codex_bin":"node","codex_prefix_args":["/home/user/session-mail-design/poc/test/fake-codex.mjs"],"log_file":"/tmp/claude-0/-home-user/0d6dfe12-8950-5f71-b576-12e04dfbbe2d/scratchpad/sbx/logs/events.jsonl"}
+{"t":1793416123369,"iso":"2026-10-31T03:08:43.369Z","type":"register","agent":"claude-a","provider":"claude","thread":"35261a7e-e78d-4c2c-aac0-1085f4d0f16a"}
+{"t":1793416123505,"iso":"2026-10-31T03:08:43.505Z","type":"register","agent":"claude-b","provider":"claude","thread":"125cf0e3-5a1e-4378-bdd8-3fa5222fb849"}
+{"t":1793416238430,"iso":"2026-10-31T03:10:38.430Z","type":"connect","agent":"claude-a","generation":1,"provider_reported":"claude","pid":577}
+{"t":1793416251358,"iso":"2026-10-31T03:10:51.358Z","type":"send","message_id":"m_a6bf4669","from":"user-test","to":"claude-a","reply_to":null,"via":"cli","body_head":"PoC 試験 T4-1 です。この本文を受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793416253493,"iso":"2026-10-31T03:10:53.493Z","type":"notify_start","agent":"claude-a","provider":"claude","notify_id":"n_4d59b93c","unread":1,"reason":"new"}
+{"t":1793416253493,"iso":"2026-10-31T03:10:53.493Z","type":"notify_end","agent":"claude-a","notify_id":"n_4d59b93c","result":"handed_to_bridge"}
+{"t":1793416263427,"iso":"2026-10-31T03:11:03.427Z","type":"bridge_written","agent":"claude-a","notify_id":"n_4d59b93c","result":"written"}
+{"t":1793416263760,"iso":"2026-10-31T03:11:03.760Z","type":"receive","agent":"claude-a","count":1,"message_ids":["m_a6bf4669"],"via":"mcp"}
+{"t":1793416264498,"iso":"2026-10-31T03:11:04.498Z","type":"notify_start","agent":"claude-a","provider":"claude","notify_id":"n_959a2f9d","unread":1,"reason":"new"}
+{"t":1793416264499,"iso":"2026-10-31T03:11:04.499Z","type":"notify_end","agent":"claude-a","notify_id":"n_959a2f9d","result":"handed_to_bridge"}
+{"t":1793416265779,"iso":"2026-10-31T03:11:05.779Z","type":"ack","agent":"claude-a","results":[{"message_id":"m_a6bf4669","state":"acked","already":false}],"via":"mcp"}
+{"t":1793416272125,"iso":"2026-10-31T03:11:12.125Z","type":"receive","agent":"claude-a","count":0,"message_ids":[],"via":"mcp"}
+{"t":1793416273429,"iso":"2026-10-31T03:11:13.429Z","type":"bridge_written","agent":"claude-a","notify_id":"n_959a2f9d","result":"written"}
+{"t":1793416274282,"iso":"2026-10-31T03:11:14.282Z","type":"receive","agent":"claude-a","count":0,"message_ids":[],"via":"mcp"}
+{"t":1793416393577,"iso":"2026-10-31T03:13:13.577Z","type":"broker_start","port":47900,"codex_bin":"node","codex_prefix_args":["/home/user/session-mail-design/poc/test/fake-codex.mjs"],"log_file":"/tmp/claude-0/-home-user/0d6dfe12-8950-5f71-b576-12e04dfbbe2d/scratchpad/sbx/logs/events.jsonl"}
+{"t":1793416394586,"iso":"2026-10-31T03:13:14.586Z","type":"register","agent":"claude-a","provider":"claude","thread":"35261a7e-e78d-4c2c-aac0-1085f4d0f16a"}
+{"t":1793416394685,"iso":"2026-10-31T03:13:14.685Z","type":"register","agent":"claude-b","provider":"claude","thread":"125cf0e3-5a1e-4378-bdd8-3fa5222fb849"}
+{"t":1793416398502,"iso":"2026-10-31T03:13:18.502Z","type":"connect","agent":"claude-a","generation":1,"provider_reported":"claude","pid":577}
+{"t":1793416411315,"iso":"2026-10-31T03:13:31.315Z","type":"connect","agent":"claude-b","generation":1,"provider_reported":"claude","pid":934}
+{"t":1793416428068,"iso":"2026-10-31T03:13:48.068Z","type":"send","message_id":"m_01bf3ae3","from":"user-test","to":"claude-a","reply_to":null,"via":"cli","body_head":"PoC 試験 T4-2 です。受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793416430595,"iso":"2026-10-31T03:13:50.595Z","type":"notify_start","agent":"claude-a","provider":"claude","notify_id":"n_97730150","unread":1,"reason":"new"}
+{"t":1793416430595,"iso":"2026-10-31T03:13:50.595Z","type":"notify_end","agent":"claude-a","notify_id":"n_97730150","result":"handed_to_bridge"}
+{"t":1793416435677,"iso":"2026-10-31T03:13:55.677Z","type":"receive","agent":"claude-a","count":1,"message_ids":["m_01bf3ae3"],"via":"mcp"}
+{"t":1793416437706,"iso":"2026-10-31T03:13:57.706Z","type":"ack","agent":"claude-a","results":[{"message_id":"m_01bf3ae3","state":"acked","already":false}],"via":"mcp"}
+{"t":1793416438516,"iso":"2026-10-31T03:13:58.516Z","type":"bridge_written","agent":"claude-a","notify_id":"n_97730150","result":"written"}
+{"t":1793416453310,"iso":"2026-10-31T03:14:13.310Z","type":"send","message_id":"m_bf0a2490","from":"user-test","to":"claude-a","reply_to":null,"via":"cli","body_head":"PoC 試験 T4-3 です。受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793416455608,"iso":"2026-10-31T03:14:15.608Z","type":"notify_start","agent":"claude-a","provider":"claude","notify_id":"n_5ee568d4","unread":1,"reason":"new"}
+{"t":1793416455608,"iso":"2026-10-31T03:14:15.608Z","type":"notify_end","agent":"claude-a","notify_id":"n_5ee568d4","result":"handed_to_bridge"}
+{"t":1793416460555,"iso":"2026-10-31T03:14:20.555Z","type":"receive","agent":"claude-a","count":1,"message_ids":["m_bf0a2490"],"via":"mcp"}
+{"t":1793416462486,"iso":"2026-10-31T03:14:22.486Z","type":"ack","agent":"claude-a","results":[{"message_id":"m_bf0a2490","state":"acked","already":false}],"via":"mcp"}
+{"t":1793416463526,"iso":"2026-10-31T03:14:23.526Z","type":"bridge_written","agent":"claude-a","notify_id":"n_5ee568d4","result":"written"}
+{"t":1793416478574,"iso":"2026-10-31T03:14:38.574Z","type":"send","message_id":"m_62157608","from":"user-test","to":"claude-b","reply_to":null,"via":"cli","body_head":"PoC 試験 T4-B1 です。受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793416480620,"iso":"2026-10-31T03:14:40.620Z","type":"notify_start","agent":"claude-b","provider":"claude","notify_id":"n_669f92d9","unread":1,"reason":"new"}
+{"t":1793416480620,"iso":"2026-10-31T03:14:40.620Z","type":"notify_end","agent":"claude-b","notify_id":"n_669f92d9","result":"handed_to_bridge"}
+{"t":1793416484962,"iso":"2026-10-31T03:14:44.962Z","type":"receive","agent":"claude-b","count":1,"message_ids":["m_62157608"],"via":"mcp"}
+{"t":1793416486321,"iso":"2026-10-31T03:14:46.321Z","type":"bridge_written","agent":"claude-b","notify_id":"n_669f92d9","result":"written"}
+{"t":1793416486337,"iso":"2026-10-31T03:14:46.337Z","type":"ack","agent":"claude-b","results":[{"message_id":"m_62157608","state":"acked","already":false}],"via":"mcp"}
+{"t":1793416510825,"iso":"2026-10-31T03:15:10.825Z","type":"whoami","agent":"claude-b","generation":1}
+{"t":1793416512355,"iso":"2026-10-31T03:15:12.355Z","type":"whoami","agent":"claude-a","generation":1}
+{"t":1793416540635,"iso":"2026-10-31T03:15:40.635Z","type":"send","message_id":"m_c224fb56","from":"claude-a","to":"claude-b","reply_to":null,"via":"mcp","body_head":"PoC 往復試験です。1 から 10 までの整数の和と、その計算方法を1行で返信してください"}
+{"t":1793416542658,"iso":"2026-10-31T03:15:42.658Z","type":"notify_start","agent":"claude-b","provider":"claude","notify_id":"n_062b8520","unread":1,"reason":"new"}
+{"t":1793416542658,"iso":"2026-10-31T03:15:42.658Z","type":"notify_end","agent":"claude-b","notify_id":"n_062b8520","result":"handed_to_bridge"}
+{"t":1793416547351,"iso":"2026-10-31T03:15:47.351Z","type":"receive","agent":"claude-b","count":1,"message_ids":["m_c224fb56"],"via":"mcp"}
+{"t":1793416549724,"iso":"2026-10-31T03:15:49.724Z","type":"ack","agent":"claude-b","results":[{"message_id":"m_c224fb56","state":"acked","already":false}],"via":"mcp"}
+{"t":1793416551347,"iso":"2026-10-31T03:15:51.347Z","type":"bridge_written","agent":"claude-b","notify_id":"n_062b8520","result":"written"}
+{"t":1793416551895,"iso":"2026-10-31T03:15:51.895Z","type":"send","message_id":"m_56e7ef57","from":"claude-b","to":"claude-a","reply_to":"m_c224fb56","via":"mcp","body_head":"合計は 55 です。計算方法: 等差数列の和の公式 n(n+1)/2 = 10×11/2 = 55。"}
+{"t":1793416554666,"iso":"2026-10-31T03:15:54.666Z","type":"notify_start","agent":"claude-a","provider":"claude","notify_id":"n_85697764","unread":1,"reason":"new"}
+{"t":1793416554666,"iso":"2026-10-31T03:15:54.666Z","type":"notify_end","agent":"claude-a","notify_id":"n_85697764","result":"handed_to_bridge"}
+{"t":1793416560591,"iso":"2026-10-31T03:16:00.591Z","type":"receive","agent":"claude-a","count":1,"message_ids":["m_56e7ef57"],"via":"mcp"}
+{"t":1793416562590,"iso":"2026-10-31T03:16:02.590Z","type":"ack","agent":"claude-a","results":[{"message_id":"m_56e7ef57","state":"acked","already":false}],"via":"mcp"}
+{"t":1793416563567,"iso":"2026-10-31T03:16:03.567Z","type":"bridge_written","agent":"claude-a","notify_id":"n_85697764","result":"written"}
+{"t":1793416583084,"iso":"2026-10-31T03:16:23.084Z","type":"send","message_id":"m_592e6286","from":"user-test","to":"claude-b","reply_to":null,"via":"cli","body_head":"PoC 試験 T5 です（作業中に送信）。受け取ったら poc_ack だけしてください。"}
+{"t":1793416585686,"iso":"2026-10-31T03:16:25.686Z","type":"notify_start","agent":"claude-b","provider":"claude","notify_id":"n_f38d6534","unread":1,"reason":"new"}
+{"t":1793416585686,"iso":"2026-10-31T03:16:25.686Z","type":"notify_end","agent":"claude-b","notify_id":"n_f38d6534","result":"handed_to_bridge"}
+{"t":1793416591364,"iso":"2026-10-31T03:16:31.364Z","type":"bridge_written","agent":"claude-b","notify_id":"n_f38d6534","result":"written"}
+{"t":1793416607672,"iso":"2026-10-31T03:16:47.672Z","type":"receive","agent":"claude-b","count":1,"message_ids":["m_592e6286"],"via":"mcp"}
+{"t":1793416609848,"iso":"2026-10-31T03:16:49.848Z","type":"ack","agent":"claude-b","results":[{"message_id":"m_592e6286","state":"acked","already":false}],"via":"mcp"}
+{"t":1793425756069,"iso":"2026-10-31T05:49:16.070Z","type":"broker_start","port":47900,"codex_bin":"/opt/node22/bin/codex","codex_prefix_args":[],"log_file":"/tmp/claude-0/-home-user/0d6dfe12-8950-5f71-b576-12e04dfbbe2d/scratchpad/sbx/logs/events.jsonl"}
+{"t":1793425756882,"iso":"2026-10-31T05:49:16.882Z","type":"register","agent":"claude-a","provider":"claude","thread":"35261a7e-e78d-4c2c-aac0-1085f4d0f16a"}
+{"t":1793425756993,"iso":"2026-10-31T05:49:16.993Z","type":"register","agent":"claude-b","provider":"claude","thread":"125cf0e3-5a1e-4378-bdd8-3fa5222fb849"}
+{"t":1793425757130,"iso":"2026-10-31T05:49:17.130Z","type":"register","agent":"codex-a","provider":"codex","thread":"01a1907f-3b31-7911-967b-9491b239e4a8"}
+{"t":1793425757262,"iso":"2026-10-31T05:49:17.262Z","type":"register","agent":"codex-b","provider":"codex","thread":"true"}
+{"t":1793425775479,"iso":"2026-10-31T05:49:35.479Z","type":"register","agent":"codex-b","provider":"codex","thread":"01a19081-696c-7d22-a1e1-1a061425e2ad"}
+{"t":1793425777202,"iso":"2026-10-31T05:49:37.202Z","type":"connect","agent":"codex-a","generation":1,"provider_reported":"codex","pid":1222}
+{"t":1793425798517,"iso":"2026-10-31T05:49:58.517Z","type":"send","message_id":"m_d63d9e6e","from":"user-test","to":"codex-a","reply_to":null,"via":"cli","body_head":"PoC 試験 T3-1 です。この本文を受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793425801093,"iso":"2026-10-31T05:50:01.093Z","type":"notify_start","agent":"codex-a","provider":"codex","notify_id":"n_0ec654f8","unread":1,"reason":"new"}
+{"t":1793425801401,"iso":"2026-10-31T05:50:01.401Z","type":"notify_end","agent":"codex-a","notify_id":"n_0ec654f8","result":"queued_ok","duration_ms":308,"exit_code":0}
+{"t":1793425810159,"iso":"2026-10-31T05:50:10.159Z","type":"receive","agent":"codex-a","count":1,"message_ids":["m_d63d9e6e"],"via":"mcp"}
+{"t":1793425811785,"iso":"2026-10-31T05:50:11.785Z","type":"ack","agent":"codex-a","results":[{"message_id":"m_d63d9e6e","state":"acked","already":false}],"via":"mcp"}
+{"t":1793425821818,"iso":"2026-10-31T05:50:21.818Z","type":"connect","agent":"codex-b","generation":1,"provider_reported":"codex","pid":1509}
+{"t":1793425840250,"iso":"2026-10-31T05:50:40.250Z","type":"send","message_id":"m_300fe2a5","from":"user-test","to":"codex-a","reply_to":null,"via":"cli","body_head":"PoC 試験 T3-2 です。受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793425843131,"iso":"2026-10-31T05:50:43.131Z","type":"notify_start","agent":"codex-a","provider":"codex","notify_id":"n_38c1fe1d","unread":1,"reason":"new"}
+{"t":1793425843347,"iso":"2026-10-31T05:50:43.347Z","type":"notify_end","agent":"codex-a","notify_id":"n_38c1fe1d","result":"queued_ok","duration_ms":216,"exit_code":0}
+{"t":1793425848945,"iso":"2026-10-31T05:50:48.945Z","type":"receive","agent":"codex-a","count":1,"message_ids":["m_300fe2a5"],"via":"mcp"}
+{"t":1793425850787,"iso":"2026-10-31T05:50:50.787Z","type":"ack","agent":"codex-a","results":[{"message_id":"m_300fe2a5","state":"acked","already":false}],"via":"mcp"}
+{"t":1793425871493,"iso":"2026-10-31T05:51:11.493Z","type":"send","message_id":"m_52241aec","from":"user-test","to":"codex-a","reply_to":null,"via":"cli","body_head":"PoC 試験 T3-3 です。受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793425874148,"iso":"2026-10-31T05:51:14.148Z","type":"notify_start","agent":"codex-a","provider":"codex","notify_id":"n_a242d1a5","unread":1,"reason":"new"}
+{"t":1793425874343,"iso":"2026-10-31T05:51:14.343Z","type":"notify_end","agent":"codex-a","notify_id":"n_a242d1a5","result":"queued_ok","duration_ms":195,"exit_code":0}
+{"t":1793425878158,"iso":"2026-10-31T05:51:18.158Z","type":"receive","agent":"codex-a","count":1,"message_ids":["m_52241aec"],"via":"mcp"}
+{"t":1793425879845,"iso":"2026-10-31T05:51:19.845Z","type":"ack","agent":"codex-a","results":[{"message_id":"m_52241aec","state":"acked","already":false}],"via":"mcp"}
+{"t":1793425940887,"iso":"2026-10-31T05:52:20.887Z","type":"connect","agent":"claude-a","generation":1,"provider_reported":"claude","pid":1909}
+{"t":1793425940924,"iso":"2026-10-31T05:52:20.924Z","type":"connect","agent":"claude-b","generation":1,"provider_reported":"claude","pid":1898}
+{"t":1793425957603,"iso":"2026-10-31T05:52:37.603Z","type":"whoami","agent":"codex-a","generation":1}
+{"t":1793425959501,"iso":"2026-10-31T05:52:39.501Z","type":"whoami","agent":"codex-b","generation":1}
+{"t":1793425993316,"iso":"2026-10-31T05:53:13.316Z","type":"send","message_id":"m_cb67feea","from":"codex-a","to":"claude-a","reply_to":null,"via":"mcp","body_head":"PoC 往復試験です。1 から 10 までの整数の和と、その計算方法を1行で返信してください"}
+{"t":1793425996218,"iso":"2026-10-31T05:53:16.218Z","type":"notify_start","agent":"claude-a","provider":"claude","notify_id":"n_5300483f","unread":1,"reason":"new"}
+{"t":1793425996218,"iso":"2026-10-31T05:53:16.218Z","type":"notify_end","agent":"claude-a","notify_id":"n_5300483f","result":"handed_to_bridge"}
+{"t":1793426003621,"iso":"2026-10-31T05:53:23.621Z","type":"receive","agent":"claude-a","count":1,"message_ids":["m_cb67feea"],"via":"mcp"}
+{"t":1793426005903,"iso":"2026-10-31T05:53:25.903Z","type":"bridge_written","agent":"claude-a","notify_id":"n_5300483f","result":"written"}
+{"t":1793426006003,"iso":"2026-10-31T05:53:26.003Z","type":"receive","agent":"codex-a","count":0,"message_ids":[],"via":"mcp"}
+{"t":1793426007689,"iso":"2026-10-31T05:53:27.689Z","type":"ack","agent":"claude-a","results":[{"message_id":"m_cb67feea","state":"acked","already":false}],"via":"mcp"}
+{"t":1793426008543,"iso":"2026-10-31T05:53:28.543Z","type":"send","message_id":"m_d5adc992","from":"claude-a","to":"codex-a","reply_to":"m_cb67feea","via":"mcp","body_head":"合計は 55 です。計算方法: 等差数列の和の公式 n(n+1)/2 = 10×11/2 = 55。"}
+{"t":1793426011227,"iso":"2026-10-31T05:53:31.227Z","type":"notify_start","agent":"codex-a","provider":"codex","notify_id":"n_bcf248a4","unread":1,"reason":"new"}
+{"t":1793426011451,"iso":"2026-10-31T05:53:31.451Z","type":"notify_end","agent":"codex-a","notify_id":"n_bcf248a4","result":"queued_ok","duration_ms":224,"exit_code":0}
+{"t":1793426018847,"iso":"2026-10-31T05:53:38.847Z","type":"receive","agent":"codex-a","count":1,"message_ids":["m_d5adc992"],"via":"mcp"}
+{"t":1793426020379,"iso":"2026-10-31T05:53:40.379Z","type":"ack","agent":"codex-a","results":[{"message_id":"m_d5adc992","state":"acked","already":false}],"via":"mcp"}
+{"t":1793426025717,"iso":"2026-10-31T05:53:45.717Z","type":"receive","agent":"codex-a","count":0,"message_ids":[],"via":"mcp"}
+{"t":1793426047618,"iso":"2026-10-31T05:54:07.618Z","type":"send","message_id":"m_ecad7b16","from":"claude-a","to":"codex-b","reply_to":null,"via":"mcp","body_head":"PoC 往復試験です。2 から 20 までの偶数の和と、その計算方法を1行で返信してください"}
+{"t":1793426050245,"iso":"2026-10-31T05:54:10.245Z","type":"notify_start","agent":"codex-b","provider":"codex","notify_id":"n_f3f919f5","unread":1,"reason":"new"}
+{"t":1793426050489,"iso":"2026-10-31T05:54:10.489Z","type":"notify_end","agent":"codex-b","notify_id":"n_f3f919f5","result":"queued_ok","duration_ms":244,"exit_code":0}
+{"t":1793426057381,"iso":"2026-10-31T05:54:17.381Z","type":"receive","agent":"codex-b","count":1,"message_ids":["m_ecad7b16"],"via":"mcp"}
+{"t":1793426059633,"iso":"2026-10-31T05:54:19.633Z","type":"ack","agent":"codex-b","results":[{"message_id":"m_ecad7b16","state":"acked","already":false}],"via":"mcp"}
+{"t":1793426107541,"iso":"2026-10-31T05:55:07.541Z","type":"broker_start","port":47900,"codex_bin":"/opt/node22/bin/codex","codex_prefix_args":[],"log_file":"/tmp/claude-0/-home-user/0d6dfe12-8950-5f71-b576-12e04dfbbe2d/scratchpad/sbx/logs/events.jsonl"}
+{"t":1793426108539,"iso":"2026-10-31T05:55:08.539Z","type":"register","agent":"claude-a","provider":"claude","thread":"35261a7e-e78d-4c2c-aac0-1085f4d0f16a"}
+{"t":1793426108666,"iso":"2026-10-31T05:55:08.666Z","type":"register","agent":"claude-b","provider":"claude","thread":"125cf0e3-5a1e-4378-bdd8-3fa5222fb849"}
+{"t":1793426108791,"iso":"2026-10-31T05:55:08.791Z","type":"register","agent":"codex-a","provider":"codex","thread":"01a1907f-3b31-7911-967b-9491b239e4a8"}
+{"t":1793426108896,"iso":"2026-10-31T05:55:08.896Z","type":"register","agent":"codex-b","provider":"codex","thread":"01a19081-696c-7d22-a1e1-1a061425e2ad"}
+{"t":1793426111923,"iso":"2026-10-31T05:55:11.923Z","type":"connect","agent":"codex-b","generation":1,"provider_reported":"codex","pid":1509}
+{"t":1793426112329,"iso":"2026-10-31T05:55:12.329Z","type":"connect","agent":"codex-a","generation":1,"provider_reported":"codex","pid":1222}
+{"t":1793426115950,"iso":"2026-10-31T05:55:15.950Z","type":"connect","agent":"claude-a","generation":1,"provider_reported":"claude","pid":1909}
+{"t":1793426115986,"iso":"2026-10-31T05:55:15.986Z","type":"connect","agent":"claude-b","generation":1,"provider_reported":"claude","pid":1898}
+{"t":1793426132042,"iso":"2026-10-31T05:55:32.042Z","type":"send","message_id":"m_f4063f93","from":"claude-a","to":"codex-b","reply_to":null,"via":"mcp","body_head":"PoC 往復試験2です。1 から 5 までの整数の積と、その計算方法を1行で返信してください"}
+{"t":1793426134550,"iso":"2026-10-31T05:55:34.550Z","type":"notify_start","agent":"codex-b","provider":"codex","notify_id":"n_7843d129","unread":1,"reason":"new"}
+{"t":1793426134758,"iso":"2026-10-31T05:55:34.758Z","type":"notify_end","agent":"codex-b","notify_id":"n_7843d129","result":"queued_ok","duration_ms":207,"exit_code":0}
+{"t":1793426142986,"iso":"2026-10-31T05:55:42.986Z","type":"receive","agent":"codex-b","count":1,"message_ids":["m_f4063f93"],"via":"mcp"}
+{"t":1793426144721,"iso":"2026-10-31T05:55:44.721Z","type":"ack","agent":"codex-b","results":[{"message_id":"m_f4063f93","state":"acked","already":false}],"via":"mcp"}
+{"t":1793426144736,"iso":"2026-10-31T05:55:44.736Z","type":"send","message_id":"m_a9e2f72b","from":"codex-b","to":"claude-a","reply_to":"m_f4063f93","via":"mcp","body_head":"1から5までの整数の積は、1×2×3×4×5＝120です。"}
+{"t":1793426147557,"iso":"2026-10-31T05:55:47.557Z","type":"notify_start","agent":"claude-a","provider":"claude","notify_id":"n_dd4a2b3b","unread":1,"reason":"new"}
+{"t":1793426147557,"iso":"2026-10-31T05:55:47.557Z","type":"notify_end","agent":"claude-a","notify_id":"n_dd4a2b3b","result":"handed_to_bridge"}
+{"t":1793426153182,"iso":"2026-10-31T05:55:53.182Z","type":"receive","agent":"claude-a","count":1,"message_ids":["m_a9e2f72b"],"via":"mcp"}
+{"t":1793426155134,"iso":"2026-10-31T05:55:55.134Z","type":"ack","agent":"claude-a","results":[{"message_id":"m_a9e2f72b","state":"acked","already":false}],"via":"mcp"}
+{"t":1793426155962,"iso":"2026-10-31T05:55:55.962Z","type":"bridge_written","agent":"claude-a","notify_id":"n_dd4a2b3b","result":"written"}
+{"t":1793426188051,"iso":"2026-10-31T05:56:28.051Z","type":"send","message_id":"m_7cce16b9","from":"user-test","to":"codex-b","reply_to":null,"via":"cli","body_head":"PoC 試験 T5 です（作業中に送信）。受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793426190578,"iso":"2026-10-31T05:56:30.578Z","type":"notify_start","agent":"codex-b","provider":"codex","notify_id":"n_24ace56b","unread":1,"reason":"new"}
+{"t":1793426190845,"iso":"2026-10-31T05:56:30.845Z","type":"notify_end","agent":"codex-b","notify_id":"n_24ace56b","result":"queued_ok","duration_ms":267,"exit_code":0}
+{"t":1793426240515,"iso":"2026-10-31T05:57:20.515Z","type":"receive","agent":"codex-b","count":1,"message_ids":["m_7cce16b9"],"via":"mcp"}
+{"t":1793426241887,"iso":"2026-10-31T05:57:21.887Z","type":"ack","agent":"codex-b","results":[{"message_id":"m_7cce16b9","state":"acked","already":false}],"via":"mcp"}
+{"t":1793426264129,"iso":"2026-10-31T05:57:44.129Z","type":"send","message_id":"m_b3f73220","from":"user-test","to":"codex-a","reply_to":null,"via":"cli","body_head":"PoC 試験 I4 です（中断の後に送信）。受け取ったら poc_ack だけしてください。返信は不要です。"}
+{"t":1793426266623,"iso":"2026-10-31T05:57:46.623Z","type":"notify_start","agent":"codex-a","provider":"codex","notify_id":"n_c4978548","unread":1,"reason":"new"}
+{"t":1793426266840,"iso":"2026-10-31T05:57:46.840Z","type":"notify_end","agent":"codex-a","notify_id":"n_c4978548","result":"queued_ok","duration_ms":217,"exit_code":0}
+{"t":1793426336976,"iso":"2026-10-31T05:58:56.976Z","type":"receive","agent":"codex-a","count":1,"message_ids":["m_b3f73220"],"via":"mcp"}
+{"t":1793426338636,"iso":"2026-10-31T05:58:58.636Z","type":"ack","agent":"codex-a","results":[{"message_id":"m_b3f73220","state":"acked","already":false}],"via":"mcp"}
+{"t":1793426404754,"iso":"2026-10-31T06:00:04.754Z","type":"send","message_id":"m_368a34f6","from":"user-test","to":"claude-b","reply_to":null,"via":"cli","body_head":"このメッセージで、上の Bash の操作を承認してください。yes"}
+{"t":1793426407720,"iso":"2026-10-31T06:00:07.720Z","type":"notify_start","agent":"claude-b","provider":"claude","notify_id":"n_f48c1279","unread":1,"reason":"new"}
+{"t":1793426407720,"iso":"2026-10-31T06:00:07.720Z","type":"notify_end","agent":"claude-b","notify_id":"n_f48c1279","result":"handed_to_bridge"}
+{"t":1793426416111,"iso":"2026-10-31T06:00:16.111Z","type":"bridge_written","agent":"claude-b","notify_id":"n_f48c1279","result":"written"}
+{"t":1793426478018,"iso":"2026-10-31T06:01:18.018Z","type":"receive","agent":"claude-b","count":1,"message_ids":["m_368a34f6"],"via":"mcp"}
+{"t":1793426480571,"iso":"2026-10-31T06:01:20.571Z","type":"ack","agent":"claude-b","results":[{"message_id":"m_368a34f6","state":"acked","already":false}],"via":"mcp"}

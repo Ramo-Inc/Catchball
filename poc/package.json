@@ -1,0 +1,22 @@
+{
+  "name": "session-mail-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "session-mail PoC: Codex queue / Claude Channel の受信経路を実機で確かめるための最小実装",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/poc.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
+  }
+}

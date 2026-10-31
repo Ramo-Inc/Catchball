@@ -1,0 +1,233 @@
+<title>poc-mail 通信モニター</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 左に参加者（状態つき）、右に時系列の通信。返信は元の依頼に紐づけて表示する */
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --fg: #1c2230;
+  --muted: #5f6a7c;
+  --line: #dce1e8;
+  --accent: #2d5fae;
+  --accent-soft: #e5edf8;
+  --ok: #2b7a4b;
+  --ok-soft: #e3f3e9;
+  --warn: #9a6200;
+  --warn-soft: #fbf0d9;
+  --codex: #6b4fb3;
+  --claude: #b4572e;
+  --font-body: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --panel: #1a2029; --fg: #e4e8ef; --muted: #9ba5b6; --line: #2b323e;
+    --accent: #8fb2ef; --accent-soft: #1f2b40; --ok: #73c995; --ok-soft: #173025; --warn: #e5b45a; --warn-soft: #3a2c12;
+    --codex: #b39cf0; --claude: #ec9a74; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --fg: #e4e8ef; --muted: #9ba5b6; --line: #2b323e;
+  --accent: #8fb2ef; --accent-soft: #1f2b40; --ok: #73c995; --ok-soft: #173025; --warn: #e5b45a; --warn-soft: #3a2c12;
+  --codex: #b39cf0; --claude: #ec9a74; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14.5px; line-height: 1.65; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+header h1 { margin: 0; font-size: 19px; letter-spacing: 0.01em; }
+header h1 span { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 8px; }
+.conn { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.conn b { color: var(--ok); font-weight: 500; }
+.banner { padding: 8px 12px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); font-size: 13.5px; }
+.grid { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; align-items: start; }
+.members { display: flex; flex-direction: column; gap: 6px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+.members h2, .timeline-head h2 { margin: 0 0 2px; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; color: var(--muted); }
+.member { text-align: left; font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.member:hover { border-color: var(--accent); }
+.member:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.member[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.member .top { display: flex; align-items: center; gap: 8px; }
+.member .name { font-weight: 500; font-family: var(--font-mono); font-size: 13.5px; }
+.prov { font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid currentColor; }
+.prov.codex { color: var(--codex); }
+.prov.claude { color: var(--claude); }
+.member .state { font-size: 12.5px; color: var(--muted); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; border: 1.5px solid var(--muted); }
+.dot.on { background: var(--ok); border-color: var(--ok); }
+.timeline { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.timeline-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px; }
+.filter-note { font-size: 12.5px; color: var(--muted); }
+.filter-note button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.msg { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.msg.flash { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px; }
+.meta time { font-family: var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.route { font-family: var(--font-mono); font-weight: 500; }
+.route .arrow { color: var(--muted); margin: 0 4px; font-weight: 400; }
+.mid { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.reply { font-size: 12.5px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font-family: inherit; }
+.reply:hover { text-decoration: underline; }
+.body { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.body.clamp { display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+.more { align-self: flex-start; font: inherit; font-size: 12.5px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
+.chip { align-self: flex-start; font-size: 12px; padding: 1px 8px; border-radius: 999px; }
+.chip.acked { background: var(--ok-soft); color: var(--ok); }
+.chip.pending { background: var(--warn-soft); color: var(--warn); }
+.empty { padding: 24px; text-align: center; color: var(--muted); background: var(--panel); border: 1px dashed var(--line); border-radius: 8px; }
+footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+@media (max-width: 760px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .members { position: static; flex-direction: row; flex-wrap: wrap; }
+  .members h2 { width: 100%; }
+  .member { flex: 1 1 140px; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>poc-mail 通信モニター<span id="mode-label"></span></h1>
+    <div class="conn" id="conn">読み込み中…</div>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+  <div class="grid">
+    <section class="members" aria-label="参加者">
+      <h2>参加者</h2>
+      <div id="members" style="display:contents"></div>
+    </section>
+    <section class="timeline" aria-label="通信履歴">
+      <div class="timeline-head">
+        <h2>通信履歴（古い順）</h2>
+        <span class="filter-note" id="filter-note"></span>
+      </div>
+      <div id="messages" style="display:contents"></div>
+    </section>
+  </div>
+  <footer>この画面は通信の観察用です。AI 同士の個別のやり取りもすべて表示されます。本文はテキストとしてだけ表示し、リンクやスクリプトは動かしません。</footer>
+</div>
+
+<script>
+(() => {
+  const SNAP = window.__POC_SNAPSHOT__ || null;          // 公開用のスナップショットなら埋め込みデータを使う
+  const $ = id => document.getElementById(id);
+  let data = null, filter = null, lastOk = null, failures = 0;
+  const expanded = new Set();
+
+  const hhmmss = t => new Date(t).toLocaleTimeString('ja-JP', { hour12: false });
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  function renderMembers() {
+    const box = $('members');
+    box.replaceChildren();
+    for (const a of data.agents) {
+      const b = el('button', 'member');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(filter === a.agent));
+      const top = el('div', 'top');
+      top.append(el('span', 'name', a.agent), el('span', 'prov ' + a.provider, a.provider === 'codex' ? 'Codex' : 'Claude'));
+      const st = el('div', 'state');
+      const dot = el('span', 'dot' + (a.connected ? ' on' : ''));
+      st.append(dot, document.createTextNode(a.connected ? '接続中' : '未接続'));
+      if (a.pending) st.append(document.createTextNode(` ・ 未取得 ${a.pending}`));
+      b.append(top, st);
+      b.addEventListener('click', () => { filter = filter === a.agent ? null : a.agent; render(); });
+      box.appendChild(b);
+    }
+  }
+
+  function chip(m) {
+    if (m.acked_at) return el('span', 'chip acked', `取得済み ${hhmmss(m.acked_at)}`);
+    if (m.received_count > 0) return el('span', 'chip pending', '本文取得済み・ACK待ち');
+    return el('span', 'chip pending', '未取得');
+  }
+
+  function jumpTo(id) {
+    const t = document.querySelector(`[data-mid="${id}"]`);
+    if (!t) return;
+    t.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    t.classList.add('flash');
+    setTimeout(() => t.classList.remove('flash'), 1800);
+  }
+
+  function renderMessages() {
+    const box = $('messages');
+    const list = data.messages.filter(m => !filter || m.from === filter || m.to === filter);
+    $('filter-note').replaceChildren();
+    if (filter) {
+      const clr = el('button', null, '解除');
+      clr.type = 'button';
+      clr.addEventListener('click', () => { filter = null; render(); });
+      $('filter-note').append(document.createTextNode(`${filter} が関わる通信だけを表示中 ・ `), clr);
+    }
+    box.replaceChildren();
+    if (list.length === 0) { box.appendChild(el('div', 'empty', 'まだ通信はありません。AI が送信すると、ここに表示されます。')); return; }
+    const byId = Object.fromEntries(data.messages.map(m => [m.message_id, m]));
+    for (const m of list) {
+      const card = el('article', 'msg');
+      card.dataset.mid = m.message_id;
+      const meta = el('div', 'meta');
+      const route = el('span', 'route');
+      route.append(document.createTextNode(m.from), el('span', 'arrow', '→'), document.createTextNode(m.to));
+      meta.append(el('time', null, hhmmss(m.created_at)), route, el('span', 'mid', m.message_id));
+      card.appendChild(meta);
+      if (m.reply_to) {
+        const src = byId[m.reply_to];
+        const r = el('button', 'reply', src ? `↩ ${src.from} の「${src.body.replace(/\s+/g, ' ').slice(0, 28)}…」への返信` : `↩ ${m.reply_to} への返信`);
+        r.type = 'button';
+        r.addEventListener('click', () => jumpTo(m.reply_to));
+        card.appendChild(r);
+      }
+      const body = el('p', 'body', m.body);
+      const long = m.body.split('\n').length > 7 || m.body.length > 420;
+      if (long && !expanded.has(m.message_id)) body.classList.add('clamp');
+      card.appendChild(body);
+      if (long) {
+        const more = el('button', 'more', expanded.has(m.message_id) ? '折り畳む' : '全文を表示');
+        more.type = 'button';
+        more.addEventListener('click', () => { expanded.has(m.message_id) ? expanded.delete(m.message_id) : expanded.add(m.message_id); renderMessages(); });
+        card.appendChild(more);
+      }
+      card.appendChild(chip(m));
+      box.appendChild(card);
+    }
+  }
+
+  function render() {
+    renderMembers();
+    renderMessages();
+    if (SNAP) {
+      $('conn').textContent = `記録時点 ${new Date(data.now).toLocaleString('ja-JP', { hour12: false })}`;
+    } else {
+      $('conn').replaceChildren(el('b', null, '● 接続中'), document.createTextNode(` ・ 更新 ${hhmmss(lastOk)}`));
+    }
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch('/api/view', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+      lastOk = Date.now(); failures = 0;
+      $('banner').hidden = true;
+      render();
+    } catch (e) {
+      failures += 1;
+      if (failures >= 2) {
+        $('banner').hidden = false;
+        $('banner').textContent = `ブローカーに接続できません。表示は最終取得時点のものです（最終更新 ${lastOk ? hhmmss(lastOk) : 'なし'}）。`;
+        $('conn').textContent = '切断中';
+      }
+    }
+  }
+
+  if (SNAP) {
+    data = SNAP;
+    $('mode-label').textContent = '試験の記録';
+    render();
+  } else {
+    poll();
+    setInterval(poll, 2000);
+  }
+})();
+</script>
