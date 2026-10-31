@@ -1,3 +1,7 @@
+> **⚠ 履歴資料（2026-10-31 時点の初期設計）。現在の実装とは異なる箇所があります。**
+> 現在の正しい情報は [docs/README.md](../README.md) から辿ってください。このファイルは経緯を確認するためだけに残しています。
+> 主な違い：SQLite は Node 組み込み（better-sqlite3 ではない）／参加は会話の中から channel_join でできる／WebUI は LAN にも公開／Codex への時間ごとの再通知はしない／Hooks 連携（hook-status）は未実装。
+
 # session-mail 導入・運用手順と AI 向け運用指示
 
 本書は成果物の一部である（仕様書の要件「成果物には接続設定と運用指示を含める」）。§4 の文面はブリッジの MCP `instructions` と `channel_join` の応答 `guide` にそのまま埋め込む。`src/bridge/instructions.ts` は本書の §4 から生成し、文面を二重に管理しない。

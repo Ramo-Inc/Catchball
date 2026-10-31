@@ -155,24 +155,30 @@ Claude の引数は、メッセージが届いたときに自動で動き出す�
 
 - この PC だけで見たい場合は、データフォルダーの `config.json` に `"ui": { "lan": false }` と書きます。
 
-## いまの状態
+## いまの状態：v1.0.0-alpha.1（アルファ版）
 
 | 段階 | 状態 |
 |---|---|
 | 受信経路の検証（PoC） | ✅ 実物の Codex CLI 0.166.0 と Claude Code 2.1.314 で、合格条件をすべて満たした（[記録](docs/verification/poc-20261031.md)） |
 | 本実装 | ✅ ブローカー・MCP ブリッジ・WebUI。自動試験 10 件すべて合格 |
-| 統括運用のデモ | ✅ 統括が4人の担当に振り分け、実装・README・テスト・レビューを完了して報告した（[記録](demo/webui-demo.html)） |
+| 統括運用のデモ | ✅ 統括が4人の担当に振り分け、実装・README・テスト・レビューを完了して報告した（[記録](docs/verification/demo-20261031.md)・[WebUI](demo/webui-demo.html)） |
 | 会話の中から参加 | ✅ 実物の Codex と Claude で、「参加して」と頼むだけで参加し、自動受信の確認まで済むことを確認した |
-| これから | ⏳ Windows での動作確認、既存の5セッションでの目的達成試験、Hooks による承認待ちの検知 |
+| これから | ⏳ Windows での動作確認、既存の5セッションでの目的達成試験、承認待ちの検知（[ROADMAP](docs/ROADMAP.md)） |
+
+要件ごとの達成状況は [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)、変更履歴は [CHANGELOG.md](CHANGELOG.md) にあります。
 
 ## もっと詳しく
 
 | ドキュメント | 内容 |
 |---|---|
-| [仕様書](docs/spec/AI通信チャンネル_MVP仕様書.md) | 目的と要件 |
-| [詳細設計](docs/design/DESIGN.md) | データ、API、通知、画面、セキュリティ |
-| [導入・運用](docs/design/OPERATIONS.md) | 手順と、AI に渡す運用指示の原文 |
-| [実装計画・試験計画](docs/design/IMPLEMENTATION_PLAN.md) | フェーズ、試験、完了の判断 |
+| [ドキュメントの案内](docs/README.md) | どれを読めばよいか、どれが正か |
+| [アーキテクチャ](docs/ARCHITECTURE.md) | 構成、状態、API、通知、セキュリティ、設定 |
+| [導入・運用](docs/OPERATIONS.md) | 手順、日常の操作、うまくいかないとき |
+| [要件の達成状況](docs/REQUIREMENTS.md) | 仕様書の要件ごとの状況と、仕様書から変えた点 |
+| [設計判断の記録](docs/DECISIONS.md) / [今後の作業](docs/ROADMAP.md) | なぜこうなっているか、次に何をするか |
+| [仕様書](docs/spec/AI通信チャンネル_MVP仕様書.md) | 元の要件（MVP 1.4） |
+
+開発に参加する AI・開発者は、まず [AGENTS.md](AGENTS.md) を読んでください。
 
 <details>
 <summary>フォルダー構成</summary>
@@ -184,8 +190,8 @@ Claude の引数は、メッセージが届いたときに自動で動き出す�
 | `src/cli/` | `session-mail`（AI 用の6操作）と `session-mail-admin`（管理用） |
 | `src/web/` | WebUI |
 | `test/` | 自動試験 |
-| `poc/` | 受信経路を検証した最小実装 |
-| `docs/` | 仕様・設計・レビュー・検証記録・画像 |
+| `poc/` | 受信経路を検証した最小実装（履歴） |
+| `docs/` | 現行のドキュメント、元の仕様書、検証記録、画像、履歴資料（`docs/archive/`） |
 | `demo/` | デモの記録（WebUI に記録データを埋め込んだ HTML） |
 
 </details>
