@@ -4,6 +4,10 @@
 
 v1.0.0-alpha.1 からの変更です。**DB を新しくしたので、前のデータは引き継ぎません**（入れ替えの手順は [OPERATIONS §1](docs/OPERATIONS.md#1-インストールとブローカーの起動)）。自動試験は29件で、実物の Codex CLI 0.166.0、Claude Code 2.1.316、Pi 1.5.0 でも確かめています。
 
+### 直したこと
+- ルームの ID に `.` と `..` を使えないようにした。作れても、削除の URL で `.` が消えて削除できなかったため。
+- WebUI の増分の取得（`GET /api/messages?since_seq=`）で、1回に返しきれないときは `has_more: true` と、続きを取るための `max_seq`（返した最後の `updated_seq`）を返すようにした。WebUI は `has_more` のあいだ続けて取る。前は全体の最新の連番を返していたため、2 秒のあいだに 200 件を超えて更新されると、超えた分が画面に出なかった。
+
 ### Pi（pi-coding-agent）の参加（D-020）
 - Pi を、Codex・Claude Code と同じ機能・同じ使い方で参加させられるようにした。`mcp.json` に session_mail を登録し（`exposure: "direct"`）、自動受信のための Pi 拡張機能（`integrations/pi/`）を `pi install` で入れる。
 - ブリッジは、クライアント名 `pi` を Claude と同じ扱いにする（会話 ID は要らない）。通知は Channel の代わりに、Pi 拡張機能の受け口（Pi のプロセス番号で決まる場所）に書く。拡張機能は `pi.sendMessage` で会話に入れる（待機中はすぐ、作業中は作業のあと）。

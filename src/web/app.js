@@ -142,10 +142,15 @@
       if (gen !== S.gen) return;
       if (S.room !== before) { await loadMembers(); renderFilters(); return reload(); }
       await loadMembers();
-      const r = await query({ since_seq: S.maxSeq, limit: 200 });
-      if (gen !== S.gen) return;  // 待っている間に、ルームや絞り込みが変わった
-      merge(r.messages, 'poll');
-      S.maxSeq = r.max_seq; S.lastOk = Date.now(); S.failures = 0;
+      // 1回で返しきれなければ（has_more）、続きから取り直す
+      let r;
+      do {
+        r = await query({ since_seq: S.maxSeq, limit: 200 });
+        if (gen !== S.gen) return;  // 待っている間に、ルームや絞り込みが変わった
+        merge(r.messages, 'poll');
+        S.maxSeq = r.max_seq;
+      } while (r.has_more);
+      S.lastOk = Date.now(); S.failures = 0;
       renderAll(true);
       if (atBottom && S.newCount) { S.newCount = 0; renderNewBtn(); window.scrollTo(0, document.body.scrollHeight); }
     } catch (e) {

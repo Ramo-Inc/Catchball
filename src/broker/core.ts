@@ -515,7 +515,11 @@ export class Core {
     if (q.q) { where.push("m.body LIKE ? ESCAPE '\\'"); params.push('%' + q.q.replace(/[\\%_]/g, c => '\\' + c) + '%'); }
     let rows: Row[];
     if (q.since_seq != null) {
-      rows = this.db.all(`SELECT * FROM messages m WHERE ${where.join(' AND ')} AND m.updated_seq > ? ORDER BY m.updated_seq LIMIT ?`, ...params, Number(q.since_seq), limit);
+      // 増分：返しきれなければ、返した最後の updated_seq を max_seq にして、続きから取り直せるようにする
+      const more = this.db.all(`SELECT * FROM messages m WHERE ${where.join(' AND ')} AND m.updated_seq > ? ORDER BY m.updated_seq LIMIT ?`, ...params, Number(q.since_seq), limit + 1);
+      const has_more = more.length > limit;
+      rows = more.slice(0, limit);
+      return { room, messages: this.messageViews(rows), has_more, max_seq: has_more ? rows[rows.length - 1].updated_seq : this.maxSeq() };
     } else {
       const extra = q.before_seq != null ? ' AND m.created_seq < ?' : '';
       const p2 = q.before_seq != null ? [...params, Number(q.before_seq)] : params;
