@@ -41,7 +41,7 @@
 | 方法 | 流れ | 使う場面 |
 |---|---|---|
 | **会話の中から参加**（通常） | ブリッジはトークンなしで起動する → AI が `channel_join` を呼ぶ → ブリッジがデータフォルダーの `tokens/join.key`（参加用キー）を読み、`POST /api/join/self` を呼ぶ → ブローカーが、AI の指定したルームと ID で登録し、トークンを返す。トークンはブリッジのメモリにだけ置く | ふつうの使い方 |
-| **トークンファイル** | `session-mail-admin provision --room <ルーム>` で参加者を登録し、`tokens/room-<ルーム>/<id>.json` を作る → 環境変数 `SESSION_MAIL_TOKEN_FILE` でブリッジに渡して起動する | 起動スクリプトで固定したい場合 |
+| **トークンファイル** | `session-mail-admin provision --room <ルーム>` で参加者を登録し、`tokens/room-<ルーム>/<id>.json` を作る → 環境変数 `SESSION_MAIL_TOKEN_FILE` でブリッジに渡して起動する。ルームは先に作っておく（なければ `ROOM_NOT_FOUND`）。登録済みの ID は、`--rotate` を付けるとトークンを発行し直す（付けなければ断る） | 起動スクリプトで固定したい場合 |
 
 会話の中から参加するときの規則（`Core.selfJoin`）：
 - `agent_id`（役割の ID）は必須です。省略すると `INVALID_ARGUMENT` で断り、「ユーザーに尋ねる」よう案内します（D-017）。ブリッジのツール定義でも必須にしています（トークンファイルで起動したブリッジを除く）。
@@ -52,14 +52,14 @@
 - 検査・登録・失効・発行は1つのトランザクションで行います。表示名の重複などで断るときは、何も変わりません。参加した時点から、その ID は使用中（接続中）として扱います。
 - 参加済みのブリッジで違う `room` や `agent_id` を指定すると、ブリッジが断ります（会話の中から参加した場合は「先に channel_leave する」、トークンファイルの場合は「変えられない」と案内します）。
 - `coordinator: true` なら統括として登録し、統括用の運用指示を返します。
-- 参加の 8 秒後に、ブローカーが自動受信の確認（probe）を送ります。
+- 参加の 8 秒後に、ブローカーが自動受信の確認（probe）を送ります（その時点で接続中で、自動受信が `not_configured` でないとき）。トークンファイルでの参加では送らないので、`session-mail-admin probe` で確かめます。
 
 ブリッジの接続の扱い：
 - ハートビートの間隔は、接続したときにブローカーが返す `heartbeat_interval_ms` を使います。ブローカーへの呼び出しは、10 秒で打ち切ります。
 - キーが無効になったとき（401。同じルーム・同じ ID に別のセッションが参加した、ルームが削除された）：会話の中から参加したブリッジは、参加していない状態に戻り、次のツールの結果でその理由を1回伝えます。自動では参加し直しません。トークンファイルのブリッジは通信を止め、作り直すよう案内します。
 - 同じトークンファイルのブリッジが、あとからもう1つ接続したとき（古い世代の 409）：前のほうは通信を止め、`SESSION_SUPERSEDED` を返します（取り返しに行くと、互いに接続を奪い合い続けるため）。
 
-ブリッジは、相手が Claude か Codex かを、環境変数 `SESSION_MAIL_PROVIDER`、なければ MCP の接続時に相手が名乗るクライアント名から判断します。Pi（クライアント名 `pi`）は Claude と同じ扱いにします（ブローカーでも `claude` として登録され、WebUI の種類も「Claude」と出ます）。`claude/channel` はどちらにも宣言します（Codex は未知の機能として無視します）。`claude/channel/permission` は宣言しません。承認をメッセージで中継する仕組みは持ちません。
+ブリッジは、相手が Claude か Codex かを、トークンファイルで起動したときはファイルの `provider`、そうでなければ環境変数 `SESSION_MAIL_PROVIDER`、それもなければ MCP の接続時に相手が名乗るクライアント名から判断します。Pi（クライアント名 `pi`）は Claude と同じ扱いにします（ブローカーでも `claude` として登録され、WebUI の種類も「Claude」と出ます）。`claude/channel` はどちらにも宣言します（Codex は未知の機能として無視します）。`claude/channel/permission` は宣言しません。承認をメッセージで中継する仕組みは持ちません。
 
 ## 3. 状態
 
@@ -69,7 +69,7 @@
 |---|---|---|
 | 参加（membership） | `provisioned` / `joined` / `left` | provision 直後は provisioned。join で joined。leave で left（未取得の配送は `cancelled_left` になり、再 join しても戻らない）。退出した ID には、同じルームで誰でも参加し直せる |
 | 接続（connection） | `online` / `offline` | ブリッジのハートビート（5 秒ごと）が 30 秒以内にあれば online。**メモリで管理**し、ブローカーを再起動すると全員 offline から始まる |
-| 自動受信（receiver_state） | `unverified` / `verified` / `failing` / `not_configured` | 通知を出した後に、同じ接続の世代で `channel_receive` が呼ばれたら verified。新しい世代で接続すると unverified に戻る。通知の失敗が3回続くと failing |
+| 自動受信（receiver_state） | `unverified` / `verified` / `failing` / `not_configured` | 通知を出した後に、同じ接続の世代で `channel_receive` が呼ばれたら verified。新しい世代で接続するか、会話の中から参加し直すと unverified に戻る。通知の失敗が3回続くと failing になり、次の通知が成功すると unverified に戻る。接続のときにブリッジの伝えた種類（provider）が登録と違えば not_configured |
 | 作業（activity_state） | `unknown` / `awaiting_approval` / `interrupted` | API（`POST /api/agent/activity`）はあるが、**それを呼ぶ Hooks 連携は未実装**。今は常に unknown |
 | 配送（deliveries.state） | `pending` / `acked` / `cancelled_left` | 宛先ごとの状態。receive で本文を返した時点で acked（取得済み）になる |
 
@@ -84,13 +84,13 @@
   - **保存**：投稿と宛先ごとの配送は、1つのトランザクションで保存します（`PRAGMA synchronous = FULL`）。
 - **受信**（`Core.receive`）：自分宛ての pending を古い順に返します（既定 10 件、最大 50 件）。返した時点で、その配送を `acked`（取得済み）にします。別の ACK の操作はありません（D-016）。そのため、同じメッセージが二度返ることはありません。受け取った直後に AI のセッションが落ちると、そのメッセージは取得済みのまま残ります。応答には、まだ返していない件数（`remaining`）と最新の参加者一覧を含めます。
 - **入力の制限**（`src/shared/validation.ts`）
-  - 表示名：1〜40 文字。前後の空白を除き、NFC に正規化します。英字の大文字・小文字を区別せずに重複を判定します。制御文字は使えません。
-  - 役割：1〜200 文字。改行は使えません。
-  - 本文：1〜20,000 文字。
+  - 表示名：1〜40 文字。前後の空白を除き、NFC に正規化します。英字の大文字・小文字を区別せずに重複を判定します。制御文字・幅のない文字・文字の向きを変える文字は使えません。
+  - 役割：1〜200 文字。前後の空白を除き、NFC に正規化します。改行などの制御文字は使えません。
+  - 本文：1〜20,000 文字（超えると `PAYLOAD_TOO_LARGE`）。空白だけの本文は空として断ります。タブ・改行以外の制御文字は使えません。
   - `client_message_id`：`[A-Za-z0-9._:-]{1,64}`。
   - 参加者の ID：`[a-z][a-z0-9-]{0,31}`。`all` は使えません。
   - ルームの ID：`[A-Za-z0-9._-]{1,32}`。大文字と小文字は区別します。
-  - HTTP の本文：JSON のオブジェクトだけを受け付けます（`null` や配列は 400）。
+  - HTTP の本文：JSON のオブジェクトだけを受け付けます（`null` や配列は 400）。POST には `Content-Type: application/json` が必要です（なければ 415 `UNSUPPORTED_MEDIA_TYPE`）。`limits.http_body_max_bytes` を超えると 413 `PAYLOAD_TOO_LARGE` です。
 
 ## 5. 通知（`src/broker/notifier.ts`）
 
@@ -100,8 +100,8 @@
 2. 通知する理由：
    - **reconnect**：未取得がある状態で接続し直したとき
    - **new**：受信されていない通知がなく、まだ一度も受信されていない新着があり、最新の新着から 2 秒たったとき（複数の新着を1回の通知にまとめる）
-   - **renotify**（Claude だけ）：通知が受信されないまま、5 分 → 15 分 → 30 分（以後 30 分ごと）たったとき
-   - **retry**（Codex・Claude とも）：前の通知が失敗し（`codex queue` の失敗、Channel の書き込みの失敗）、未取得が残っているとき。30 秒 → 2 分 → 10 分（以後 10 分ごと）の間隔で送り直す（`notify.retry_after_failure_ms`）。失敗が3回続くと、自動受信は「失敗」になる
+   - **renotify**（Claude と Pi。Pi は Claude と同じ種類として登録されるため）：通知が受信されないまま、5 分 → 15 分 → 30 分（以後 30 分ごと）たったとき
+   - **retry**（Codex・Claude・Pi とも）：前の通知が失敗し（`codex queue` の失敗、Channel や Pi の受け口への書き込みの失敗）、未取得が残っているとき。30 秒 → 2 分 → 10 分（以後 10 分ごと）の間隔で送り直す（`notify.retry_after_failure_ms`）。失敗が3回続くと、自動受信は「失敗」になる
 3. **Codex には時間ごとの再通知をしない**：`codex queue` は Codex 側に保存され、アイドルになれば必ず処理されるためです。重ねると、余分なターンが走ります。ただし、`codex queue` そのものが失敗したときは、retry で送り直します。
 4. 直前の 8 秒以内にツールを使っていた Codex には、新着の通知を少し待ちます。ターンの中で自分で受信することが多いためです。
 5. 届け方：
@@ -133,13 +133,13 @@
 - `since_seq`：増分を取る。全体の変更連番 `updated_seq` を使うので、取得による更新も取りこぼしません
 - 絞り込み：`participant`、`kind`、`q`
 
-エラーの形は `{ "error": { "code", "message", "hint", "details" } }` です。
+エラーの形は `{ "error": { "code", "message", "hint", "details" } }` です。業務のエラー（`core.ts`・`validation.ts`）のほかに、HTTP の層が次を返します：`FORBIDDEN`（Host が違えば 421、Origin が違えば 403）、`NOT_FOUND`（404）、`UNSUPPORTED_MEDIA_TYPE`（415）、`TOO_MANY_ATTEMPTS`（ログインの 429）、`INTERNAL`（500）。
 
 ## 6-2. WebUI（`src/web/`）
 
 - 素の JavaScript で、ビルドせずにそのまま配信します。
 - 右上でルームを選び、そのルームの参加者とメッセージを表示します。選んだルームはブラウザー（`localStorage`）に覚えます。ルームが1つもないときや、見ていたルームが削除されたときは、そう表示します。
-- 2 秒ごとに、ルームの一覧・参加者・メッセージの増分（`since_seq`）を取り直します。このとき、操作中の入力欄や選択欄は作り直しません。ルームや絞り込みを変えたあとに届いた、前の条件の応答は捨てます。ログイン画面の間は、取り直しを止めます。
+- 2 秒ごとに、ルームの一覧・参加者・メッセージの増分（`since_seq`、1回に最大 200 件）を取り直します。2 秒のあいだに 200 件を超えて更新されると、超えた分は画面に出ません（読み込み直せば出る。[ROADMAP](ROADMAP.md) の K-14）。このとき、操作中の入力欄や選択欄は作り直しません。ルームや絞り込みを変えたあとに届いた、前の条件の応答は捨てます。ログイン画面の間は、取り直しを止めます。
 - 作成・削除などの操作はありません（閲覧専用）。
 - `export` で書き出した JSON を `window.__SM_SNAPSHOT__` に入れたページを作ると、その記録を表示できます（`demo/webui-demo.html`）。
 
@@ -147,11 +147,11 @@
 
 - **Host の検証**
   - 47821：`127.0.0.1` か `localhost` だけを受け付けます。
-  - 47822：IP アドレス、この PC の名前（`<名前>` と `<名前>.local`）、`ui.allowed_hosts` に書いた名前だけを受け付けます（DNS リバインディング対策）。それ以外は 421 を返します。
+  - 47822：IP アドレス、`localhost`、この PC の名前（`<名前>` と `<名前>.local`）、`ui.allowed_hosts` に書いた名前だけを受け付けます。どちらも、Host のポートが待ち受けのポートと一致する必要があります（DNS リバインディング対策）。それ以外は 421 を返します。
 - **Origin の検証**
   - AI・管理・参加の API：ブラウザーから来たもの（Origin ヘッダーがあるもの）は拒否します。
   - WebUI の API：自分のページのオリジンだけを認めます。POST では Origin を必須にします。
-- **WebUI のログイン**：viewer トークンが必要です。送信元ごとに失敗を数え、10 分で 10 回失敗したら 10 分間止めます。Cookie は HttpOnly、SameSite=Strict で、7 日間有効です。ログアウトすると、サーバー側でもそのセッションを無効にします。ルームは閲覧の境目ではなく、ログインすれば全ルームを見られます。
+- **WebUI のログイン**：viewer トークンが必要です。送信元ごとに失敗を数え、最初の失敗から 10 分以内に 10 回失敗すると、その最初の失敗から 10 分たつまでログインを止めます（429）。失敗のたびに、答えを 0.8 秒遅らせます。Cookie は HttpOnly、SameSite=Strict で、7 日間有効です。ログアウトすると、サーバー側でもそのセッションを無効にします。ルームは閲覧の境目ではなく、ログインすれば全ルームを見られます。
 - **WebUI の表示**：CSP で外部のスクリプトを禁止し、本文は `textContent` だけで表示します（自動試験で `innerHTML` を使っていないことを確認しています）。
 - **秘密の保存**：トークンは SHA-256 のハッシュだけを DB に保存します。トークンファイルは 0600 で作ります。ログに本文とトークンは書きません。
 - **前提と限界**
@@ -189,7 +189,7 @@ logs/broker.log      ブローカーのログ
 | `ui.lan` / `ui.port` / `ui.allowed_hosts` | true / 47822 / [] | WebUI を LAN に公開するか、そのポート、Host として許可する名前 |
 | `heartbeat_interval_ms` / `offline_after_ms` | 5000 / 30000 | ハートビートの間隔と、切断と判定するまでの時間 |
 | `notify.debounce_ms` | 2000 | 新着をまとめる待ち時間 |
-| `notify.claude_renotify_backoff_ms` | [300000, 900000, 1800000] | Claude への再通知の間隔 |
+| `notify.claude_renotify_backoff_ms` | [300000, 900000, 1800000] | Claude（と Pi）への再通知の間隔 |
 | `notify.retry_after_failure_ms` | [30000, 120000, 600000] | 通知に失敗したあと、送り直すまでの間隔 |
 | `notify.codex_quiet_after_tool_ms` | 8000 | ツールを使った直後の Codex への通知を待つ時間 |
 | `notify.attention_after_ms` | 600000 | 通知の後、受信がなければ「要確認」にするまでの時間 |

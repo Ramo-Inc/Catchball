@@ -168,10 +168,10 @@ Pi に、ルーム・ID・表示名・役割を伝えて参加を頼みます。
 WebUI の参加者の一覧か、次のコマンドで確かめます。
 
 ```bash
-node <Catchball>/dist/cli/admin.js status --room proj-a
+node <Catchball>/dist/cli/admin.js status
 ```
 
-Pi の行に `online` と `自動受信:verified` が出ていれば完了です。種類は「claude」と出ます（設計どおり。ブローカーは Pi を Claude と同じ種類として扱います）。
+全ルームの参加者が1行ずつ出ます（先頭の列がルーム）。Pi の行に `online` と `自動受信:verified` が出ていれば完了です。種類は `claude` と出ます（WebUI では「Claude」。設計どおり。ブローカーは Pi を Claude と同じ種類として扱います）。
 
 **メッセージを1通送って試す**
 ほかの AI のセッションから Pi の ID 宛てに送るよう頼めば、Pi が自分から受信して対応します。AI のセッションが手元にないときは、コマンドで相手役を作って送れます（[OPERATIONS.md §4.7](OPERATIONS.md#47-トークンファイルで参加させる方法)・§6）。
@@ -207,8 +207,10 @@ MCP サーバーは、Pi を**起動したときに**読み込まれます。登
 まず、ブローカーの状態と通知のエラーを見ます。
 
 ```bash
-node <Catchball>/dist/cli/admin.js status --room <ルーム>
+node <Catchball>/dist/cli/admin.js status
 ```
+
+全ルームの参加者が出ます。先頭の列がルーム、行の最後に通知のエラーが出ます。
 
 | 症状 | 原因と対処 |
 |---|---|

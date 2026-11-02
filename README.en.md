@@ -15,7 +15,7 @@ Several AI sessions running on the same PC can send messages to a specific membe
 - **Talk to anyone directly.** Everyone in a room is equal. A member can send to a specific member by ID, or to everyone. Replies are linked to the original message.
 - **Messages arrive even while the recipient is busy.** Messages are stored in an inbox. The recipient is only told that it has unread messages. It fetches them when it is free, so its current work is never interrupted.
 - **Call members by role ID.** Members are identified by role IDs such as `dev` or `review`. You can swap the session behind a role from Codex to Claude Code (or back) and keep the same ID. Messages that were waiting for that role carry over.
-- **See every exchange.** For each room, the web UI shows every message body and, for each recipient, whether it has been read (✓) or not yet (⋯). You can also open it from another PC on the same network.
+- **See every exchange.** For each room, the web UI shows every message body and, for each recipient, whether it has been read (✓) or not yet (…). You can also open it from another PC on the same network.
 
 How you use it depends on what you ask the AI sessions to do. You can appoint a coordinator to hand out work, or have two sessions consult each other (see [Examples](#examples)).
 
@@ -71,7 +71,7 @@ Send a policy change or a decision to everyone in the room at once with `to: "al
 
 | | |
 |---|---|
-| ![Delivery status per recipient](docs/images/delivery-status.png) | **Delivery status per recipient**<br/>Under each message, the recipients' number icons (matching the numbers in the member list on the left) are shown.<br/>✓ (green): read<br/>⋯ (yellow): not read yet<br/>! (red): needs attention (for example, a notification failed)<br/>× (gray): delivery stopped because the member left<br/>Click 「宛先ごとの状況」 (status per recipient) to see times and details. |
+| ![Delivery status per recipient](docs/images/delivery-status.png) | **Delivery status per recipient**<br/>Under each message, the recipients' number icons (matching the numbers in the member list on the left) are shown.<br/>✓ (green): read<br/>… (yellow): not read yet<br/>! (red): needs attention (for example, a notification failed)<br/>× (gray): delivery stopped because the member left<br/>Click 「宛先ごとの状況」 (status per recipient) to see times and details. |
 | ![How replies connect](docs/images/thread.png) | **How messages connect**<br/>A reply shows 「↩ 〜への返信」 (reply to …). Click it to jump to the original message.<br/>The tag on the first line, such as [依頼 T-01] (request), [完了 T-01] (done) or [確認 T-01] (check), tells you which task the message is about.<br/>Click a member on the left to show only the messages they are involved in. |
 
 Choose the room to view in the top right corner. Dark mode is supported.
@@ -80,7 +80,7 @@ Choose the room to view in the top right corner. Dark mode is supported.
 
 ## Getting started
 
-You need Node.js 22.13 or later and the AI you use: Codex CLI 0.166.0 or later, Claude Code (signed in with claude.ai or a Console API key), or Pi (pi-coding-agent) 1.5.0 or later.
+You need Node.js 22.13 or later and the AI you use: Codex CLI 0.166.0 or later, Claude Code (signed in with claude.ai or a Console API key), or Pi (pi-coding-agent) 1.5.0 or later. If you use Pi, Pi itself needs Node.js 22.19 or later.
 
 ### 1. Install and start the broker
 
@@ -190,7 +190,7 @@ Firewall settings for opening it from another PC, and how to restrict it to this
 
 ## Status
 
-The latest version tag is **v1.0.0-alpha.1** (alpha). Later changes, including rooms, are on `main` (see "未リリース" (unreleased) in the [CHANGELOG](CHANGELOG.md)). It has been tested with real Codex CLI 0.166.0, Claude Code 2.1.316 and Pi 1.5.0 on Linux. **It has not been run on Windows yet.**
+The latest version tag is **v1.0.0-alpha.1** (alpha). Later changes, including rooms, are on `main` (see "未リリース" (unreleased) in the [CHANGELOG](CHANGELOG.md)). It has been tested with real Codex CLI 0.166.0, Claude Code 2.1.316 and Pi 1.5.0 on Linux. **It has not been run on Windows or Mac yet.**
 
 | Stage | Status |
 |---|---|
@@ -200,7 +200,7 @@ The latest version tag is **v1.0.0-alpha.1** (alpha). Later changes, including r
 | Rooms and swapping sessions | ✅ Tested with real Codex and Claude: creating, joining, messaging in, moving between and deleting rooms, and swapping a role between Codex and Claude |
 | Review test | ✅ A Codex coordinator and two Claude reviewers shared a code review inside a room and summarized it in a report. The issues they found have been fixed |
 | Pi | ✅ Tested with real Pi (Haiku): joining, the auto-receive check, receiving and replying on its own, deferring messages that arrive while it is busy, renotifying after an interruption, and rejoining after `/new` ([record](docs/verification/pi-20261102.md)) |
-| Next | ⏳ Testing on Windows, a goal test with the user's own five sessions, detecting sessions that are waiting for approval ([ROADMAP](docs/ROADMAP.md)) |
+| Next | ⏳ Testing on Windows and Mac, a goal test with the user's own five sessions, detecting sessions that are waiting for approval ([ROADMAP](docs/ROADMAP.md)) |
 
 The status of each requirement is in [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 

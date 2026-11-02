@@ -1,6 +1,6 @@
 # Catchball で作業する AI・開発者へ
 
-Catchball は、Codex CLI・Claude Code・Pi（pi-coding-agent）のセッションをつなぐ AI エージェント間のメッセージバスです（コード上の名前は `session-mail`、MCP サーバー名は `session_mail`）。最後に付けたバージョンは **v1.0.0-alpha.1** で、その後の変更（ルーム、役割の ID など）は `main` に入っています（CHANGELOG の「未リリース」）。
+Catchball は、Codex CLI・Claude Code・Pi（pi-coding-agent）のセッションをつなぐ AI エージェント間のメッセージバスです（コード上の名前は `session-mail`、MCP サーバー名は `session_mail`）。最後に付けたバージョンは **v1.0.0-alpha.1** で、その後の変更（ルーム、役割の ID、Pi の参加など）は `main` に入っています（CHANGELOG の「未リリース」）。
 
 ## まず読むもの
 
@@ -28,12 +28,13 @@ npm test         # build してから test/main.test.mjs を実行（29件）
 | 場所 | 内容 |
 |---|---|
 | `src/broker/core.ts` | 業務処理（ルーム・参加・送信・受信・接続・WebUI 用の集計） |
-| `src/broker/notifier.ts` | 受信通知の判定と送信（codex queue / Channel） |
+| `src/broker/notifier.ts` | 受信通知の判定と送信（Codex は codex queue。Claude と Pi はハートビートの応答に載せ、ブリッジが届ける） |
 | `src/broker/http.ts` | HTTP API、Host・Origin の検証、LAN 側の制限 |
 | `src/broker/db.ts` | SQLite のスキーマ（`SCHEMA`）とトランザクション |
-| `src/bridge/main.ts` | MCP ブリッジ（8ツール、会話の中からの参加、ルームの操作、ハートビート） |
+| `src/bridge/main.ts` | MCP ブリッジ（8ツール、会話の中からの参加、ルームの操作、ハートビート、通知の届け先の振り分け：Claude は Channel、Pi は拡張機能の受け口） |
 | `src/shared/text.ts` | AI に渡す文面（運用指示・通知文） |
 | `src/shared/config.ts` | 設定の項目と既定値、データフォルダー |
+| `src/cli/` | 管理用 CLI（`admin.ts`：serve・provision・status など）と AI 用 CLI（`session-mail.ts`：人の確認やデバッグ用） |
 | `src/web/` | WebUI（素の JavaScript。ビルドなしでそのまま配信） |
 | `integrations/pi/` | Pi 拡張機能（素の JavaScript。ブリッジが書いた通知を Pi の会話に入れる。D-020） |
 | `test/main.test.mjs` | 自動試験 |
@@ -50,9 +51,10 @@ npm test         # build してから test/main.test.mjs を実行（29件）
 
 **変更のしかた**
 - 動きを変えたら、試験を追加・更新し、`npm test` が全件通ることを確かめる。
-- AI に渡す文面（`src/shared/text.ts`）や通知のしかたを変えたら、可能なら実物の Codex と Claude で動きを確かめる。Codex は MCP の instructions より通知文に従う傾向がある。
+- AI に渡す文面（`src/shared/text.ts`）や通知のしかたを変えたら、可能なら実物の Codex・Claude・Pi で動きを確かめる。Codex は MCP の instructions より通知文に従う傾向がある。Pi には、通知文がそのまま会話に入る。
+- Pi の受け口の場所の決め方は、`integrations/pi/catchball.js` と `src/bridge/main.ts` の両方に書いてある（拡張機能をビルドしない単独のファイルにするため）。変えるときは両方を直す。
 - ツール（`src/bridge/main.ts`）を追加・変更したら、`docs/MCP_TOOLS.md` も直す（最後の試験「ドキュメント」が、ツール名と必須の引数の説明があるかを確かめる）。
-- 動き・設定・API を変えたら、`docs/ARCHITECTURE.md`・`docs/OPERATIONS.md`・`CHANGELOG.md` を更新する。要件の状況が変わったら `docs/REQUIREMENTS.md`、判断をしたら `docs/DECISIONS.md` に追記、作業が片付いたら `docs/ROADMAP.md` を更新する。
+- 動き・設定・API を変えたら、`docs/ARCHITECTURE.md`・`docs/OPERATIONS.md`・`CHANGELOG.md` を更新する。Pi の導入や動きにかかわるときは `docs/PI_SETUP.md` も直す。要件の状況が変わったら `docs/REQUIREMENTS.md`、判断をしたら `docs/DECISIONS.md` に追記、作業が片付いたら `docs/ROADMAP.md` を更新する。
 - `docs/spec/`（ユーザーが書いた元の仕様書）は書き換えない。仕様から変えた点は `docs/REQUIREMENTS.md` の「仕様書から変えた点」に書く。
 - `docs/archive/` と `poc/` は履歴なので、直さない。
 - ドキュメントは日本語で、平易に書く。ただし、README には英語版（`README.en.md`）がある。README を変えたら、英語版も同じ内容に直す。
@@ -63,8 +65,17 @@ npm test         # build してから test/main.test.mjs を実行（29件）
 
 ## 実物の CLI で試すときの注意
 
-- MCP サーバーは、セッションを**起動したときにしか**読み込まれない。登録してから起動する。
+- MCP サーバーは、セッションを**起動したときにしか**読み込まれない。登録してから起動する（Pi は `/reload` でも読み込み直せる）。
 - Claude の自動受信には、起動時の引数 `--dangerously-load-development-channels server:session_mail` が必要。起動のたびに確認画面が出る。
 - Codex は、Esc で中断した直後は通知を自動で処理しない。
 - Claude（またはクラウドセッション）の中から別の Claude を起動するときは、`env -i` などで親の環境変数（`CLAUDE_CODE_SESSION_ID` など）を外す。外さないと、親のセッションと混ざる。
 - Codex の担当を、sandbox なし・承認なしで起動しない。作業フォルダーの中だけ書ける通常の設定（`workspace-write`・`on-request`）を使う。
+- 試すときは、データフォルダーを一時フォルダーにする（`SESSION_MAIL_HOME`）。
+
+**Pi**（手順は [docs/PI_SETUP.md](docs/PI_SETUP.md)。AI が代わりに導入するときの注意は §10）
+- 登録は `pi mcp add session_mail --exposure direct -- node <Catchball>/dist/bridge/main.js`。`exposure` を `direct` にしないと、ツールがモデルに直接見えない。`command` は `node` にする（`npx` などを挟むと、ブリッジの親が Pi でなくなり、通知が届かない）。
+- 自動受信には、拡張機能（`pi install <Catchball>/integrations/pi`）が必要。`pi list` と `pi mcp list` で確かめられる（モデルは使わない）。
+- `/new`・`/resume`・fork・`/reload` では、Pi がブリッジを起動し直すので、ルームに参加していない状態に戻る。同じルーム・同じ ID で参加し直す。
+- Claude やクラウドセッションの中から Pi を起動するときは、`env -i` で親の環境変数を外し、必要なもの（`HOME`・`PATH`・`ANTHROPIC_API_KEY`・プロキシの設定など）だけを渡す。API キーは表示・記録・コミットしない。
+- 試すときのモデルは、料金を抑えるため Haiku（`--provider anthropic --model claude-haiku-5-5`）にする。Opus は使わない。
+- 試験を自動で進めるために RPC モード（`--mode rpc`）を使ってよいが、対象はふだんの対話の画面（TUI）。`-p`（1回答えて終わる）は対象外。
