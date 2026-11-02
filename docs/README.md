@@ -25,6 +25,7 @@ Catchball は、Codex CLI・Claude Code・Pi（pi-coding-agent）のセッショ
 | 設定の項目と既定値 | `src/shared/config.ts` の `DEFAULT_CONFIG` |
 | API の一覧 | `src/broker/http.ts` の `routes` |
 | AI に渡す文面（運用指示・通知文） | `src/shared/text.ts` |
+| Pi の受け口の場所と、通知の流し方 | `integrations/pi/catchball.js` と `src/bridge/main.ts` の `piSocketPath`・`writeToPi`（場所の決め方は両方に書いてあるので、変えるときは両方を直す。試験でそろっていることを確かめている） |
 | AI に見えるツールと説明 | `src/bridge/main.ts`（使い方の説明は [MCP_TOOLS.md](MCP_TOOLS.md)。試験で両者の一致を確かめている） |
 | 仕様として求められていること | [spec/AI通信チャンネル_MVP仕様書.md](spec/AI通信チャンネル_MVP仕様書.md)（ただし変更点は [REQUIREMENTS.md](REQUIREMENTS.md) を優先） |
 

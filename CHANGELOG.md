@@ -8,6 +8,7 @@ v1.0.0-alpha.1 からの変更です。**DB を新しくしたので、前のデ
 - Pi を、Codex・Claude Code と同じ機能・同じ使い方で参加させられるようにした。`mcp.json` に session_mail を登録し（`exposure: "direct"`）、自動受信のための Pi 拡張機能（`integrations/pi/`）を `pi install` で入れる。
 - ブリッジは、クライアント名 `pi` を Claude と同じ扱いにする（会話 ID は要らない）。通知は Channel の代わりに、Pi 拡張機能の受け口（Pi のプロセス番号で決まる場所）に書く。拡張機能は `pi.sendMessage` で会話に入れる（待機中はすぐ、作業中は作業のあと）。
 - ブローカー・DB・WebUI は変えていない。Pi の種類は「Claude」と表示される。
+- 自動試験に、Pi のブリッジと拡張機能の3件を足した。
 - Pi をつなぐ手順を1枚にまとめた（[docs/PI_SETUP.md](docs/PI_SETUP.md)）。
 
 ### ルーム（D-018）

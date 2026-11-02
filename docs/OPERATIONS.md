@@ -2,7 +2,7 @@
 
 `<Catchball>` はクローンしたフォルダーの絶対パス、`<データ>` はデータフォルダー（[ARCHITECTURE.md §8](ARCHITECTURE.md#8-データと設定)）を表します。設定ファイルの中のパスは、Windows でも `/` 区切りで書けます。
 
-> **動作確認の状況**：Linux 上の Codex CLI 0.166.0 と Claude Code 2.1.316 で確かめています。**Windows ではまだ動かしていません**（[ROADMAP.md](ROADMAP.md) の R-1）。
+> **動作確認の状況**：Linux 上の Codex CLI 0.166.0、Claude Code 2.1.316、Pi 1.5.0 で確かめています。**Windows と Mac ではまだ動かしていません**（[ROADMAP.md](ROADMAP.md) の R-1）。
 
 ## 1. インストールとブローカーの起動
 
@@ -91,7 +91,7 @@ pi install <Catchball>/integrations/pi
 - `exposure: "direct"` を入れないと、ツールがモデルに直接見えません（Pi の既定は `codemode`）。
 - `command` は `node` にします。拡張機能とブリッジは、Pi のプロセス番号で受け口の場所を決めるので、`npx` などを挟むと受け口が見つかりません。Node のバージョン管理の道具（Volta など）の中継が挟まる場合は、`command` に node の実体の絶対パス（`node -p process.execPath` で分かる）を書きます。
 - Pi は、ツールを呼ぶたびの承認を求めません。退出や削除の前の確認も出ません。
-- ブローカーの中では、Pi は Claude と同じ種類として扱われます。WebUI と `status` の種類も「Claude」と出ます。
+- ブローカーの中では、Pi は Claude と同じ種類として扱われます。種類は、WebUI では「Claude」、`status` では `claude` と出ます。
 
 ## 3. 起動する
 
@@ -219,7 +219,7 @@ node dist/cli/admin.js provision --room proj-a --agent dev --provider claude --c
 |---|---|
 | `node dist/cli/admin.js status` | 全ルームの参加者ごとの参加・接続・自動受信・未取得件数・通知のエラー（先頭の列がルーム） |
 | `node dist/cli/admin.js probe <ルーム> <ID> [--wait 120]` | 自動受信を確認する（通知を出し、受信されるまで待つ） |
-| `node dist/cli/admin.js export [--room <ルーム>] [--from ISO] [--to ISO] --out file.json` | やり取りを JSON で書き出す（証跡用。`--room` を省くと全ルーム） |
+| `node dist/cli/admin.js export [--room <ルーム>] [--from ISO] [--to ISO] [--out file.json]` | やり取りを JSON で書き出す（証跡用。`--room` を省くと全ルーム、`--out` を省くと画面に出す） |
 | `node dist/cli/admin.js viewer-token [--rotate]` | WebUI のログイン用トークンを表示する（再発行する） |
 | `node dist/cli/session-mail.js <join|members|send|receive|leave>` | AI と同じ送受信をコマンドで行う（`SESSION_MAIL_TOKEN_FILE` か `--token-file` でトークンファイルを渡す） |
 
@@ -268,4 +268,4 @@ AI に渡す文面は `src/shared/text.ts` にあり、ここが正です。
 | 統括用・担当用の指示（`COORDINATOR_GUIDE` / `WORKER_GUIDE`） | `channel_join` の応答の `guide` |
 | 通知文（`noticeText`）・接続確認（`PROBE_TEXT`） | Codex には `codex queue`、Claude には Channel で送る |
 
-文面を変えたら、実際の Codex と Claude で動きを確かめてください。Codex は、MCP の instructions よりも通知文に従う傾向があります。
+文面を変えたら、実際の Codex・Claude・Pi で動きを確かめてください。Codex は、MCP の instructions よりも通知文に従う傾向があります。
