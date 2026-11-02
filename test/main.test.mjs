@@ -148,6 +148,8 @@ test('認証と HTTP の安全策', async () => {
   assert.equal((await req('POST', '/api/ui/login', { body: { token: 'x' }, origin: 'http://evil.example' })).status, 403);
   const page = await req('GET', '/');
   assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
+  assert.doesNotMatch(page.headers.get('content-security-policy'), /https?:/, 'WebUI は外へ通信しない（CSP で外のオリジンを許さない）');
+  assert.doesNotMatch(readFileSync(join(ROOT, 'src/web/index.html'), 'utf8'), /https?:\/\//, 'WebUI のページは外のファイルを読み込まない');
   assert.doesNotMatch(readFileSync(join(ROOT, 'src/web/app.js'), 'utf8'), /innerHTML/, '本文を HTML として扱わない');
 });
 
