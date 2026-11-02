@@ -19,6 +19,7 @@
 | サーバーからの通知 | 受け手があるのは、ログ（`notifications/message`）とツール一覧の変更だけ。**それ以外は捨てる**。拡張機能に通知を渡す口もない | `packages/mcp/src/client.ts`（`handleNotification`）、`runtime.ts` |
 | 会話への差し込み | `pi.sendMessage(message, { triggerTurn, deliverAs })`。待機中は `triggerTurn: true` ですぐ動き出す。作業中は、`followUp` なら作業がすべて終わってから処理される | docs/extensions.md「pi.sendMessage」 |
 | 長く動く資源 | ソケットなどは、読み込みの時点ではなく `session_start` で始め、`session_shutdown` で閉じる | docs/extensions.md「Long-lived resources and shutdown」 |
+| セッションの切り替え | `/new`・`/resume`・fork・`/reload` では、今のセッションに `session_shutdown` が来て、MCP の接続がすべて閉じられる（ブリッジは終わる）。拡張機能は作り直され、新しい拡張機能に `session_start` が来て、ブリッジが起動し直される | `packages/coding-agent/src/extensions/mcp/index.ts`（`session_shutdown`）、docs/extensions.md「Session replacement lifecycle」、§1.5 |
 | 拡張機能の入れ方 | `pi install <パス>`、設定の `extensions`、起動時の `-e <パス>`。.js をそのまま読み込む | docs/packages.md、docs/extensions.md |
 
 ほかの人が作ったエージェント間メッセージの拡張機能（pi-c2c、@pi-orca/messages など）も、「拡張機能が `pi.sendMessage` で会話に差し込む」形でした（pi-c2c は中身を読んで確認。ほかはパッケージの説明による）。
@@ -57,6 +58,24 @@
 - 設定は、`PI_CODING_AGENT_DIR` で一時フォルダーに向けられる。モデルは `--provider anthropic --model claude-haiku-5-5`。
 - クラウド環境では、`ANTHROPIC_API_KEY` という名前の環境変数はセッションの中で見えない。別の名前（例 `PI_ANTHROPIC_API_KEY`）で入れ、Pi を起動するときだけ `ANTHROPIC_API_KEY` として渡す（`env -i` で親の環境を外す）。
 - 環境変数を変えたあとは、セッションが一時停止から再開したときに読み直される。
+
+### 1.5 プロセス番号とセッションの切り替え（実物で確認。LLM は使わない）
+
+mcp.json に `command: "node"` で代役のブリッジを登録し、拡張機能と代役のそれぞれでプロセス番号を記録しました。そのうえで、RPC で `new_session`（`/new` と同じ）を送りました。
+
+```
+ext load inst=g3qo
+session_start reason=startup inst=g3qo
+bridge pid=2431 ppid=2417            ← 親のプロセス番号（Pi 本体。下の注）
+session_shutdown reason=new inst=g3qo
+bridge exit pid=2431                 ← /new でブリッジが終わる
+ext load inst=b770                   ← 拡張機能が作り直される
+session_start reason=new inst=b770
+session_start reason=new inst=b770   ← 同じ拡張機能に2回届く
+bridge pid=2438 ppid=2417            ← ブリッジが起動し直される（親は同じ Pi）
+```
+
+上の記録は2回目のもので、拡張機能の区別のために、拡張機能ごとの印（inst）を記録しています。拡張機能から見た `process.pid` がブリッジの親のプロセス番号と一致することは、同じ手順の1回目で確かめました（`ext load pid=2368`、`bridge pid=2382 ppid=2368`。`/new` のあとも `bridge pid=2389 ppid=2368`）。
 
 ## 2. Codex・Claude との対応
 
@@ -100,7 +119,8 @@ flowchart LR
 ```
 
 **受け口の場所はプロセス番号で決める**
-- Pi は、mcp.json の `command` をシェルを通さずに直接起動します（§1.1）。そのため、`command` が `node` なら、ブリッジの親のプロセス番号（`process.ppid`）は Pi 本体のプロセス番号（拡張機能から見た `process.pid`）と一致します。
+- Pi は、mcp.json の `command` をシェルを通さずに直接起動します（§1.1）。そのため、`command` が `node` なら、ブリッジの親のプロセス番号（`process.ppid`）は Pi 本体のプロセス番号（拡張機能から見た `process.pid`）と一致します（実物で確認。§1.5）。
+- ただし、Node のバージョン管理の道具（Volta など）が `node` の代わりに中継のプログラムを置き、それが本物の node を子として起動する場合は、ブリッジの親が中継のプログラムになり、一致しません。その場合は、mcp.json の `command` に node の実体の絶対パスを書きます（OPERATIONS に書く）。一致しないときは、ブリッジが受け口を見つけられず、通知の失敗として WebUI に出ます。
 - 両者は、この番号から同じ場所を決められます。何も受け渡す必要がありません。
   - Linux・Mac：`<OS の一時フォルダー>/catchball-pi-<番号>.sock`
   - Windows：`\\.\pipe\catchball-pi-<番号>`
@@ -122,7 +142,8 @@ flowchart LR
 - **`session_start`**
   - §3 の場所で、受け口を開く（`net.createServer().listen(場所)`）。
   - Unix ソケットは、前のファイルが残っていれば消してから開く。
-  - すでに開いていれば（`/reload` など）、閉じてから開き直す。
+  - 同じ拡張機能に `session_start` が2回届くことがある（§1.5）。すでに開いていれば、何もしない。
+  - セッションの切り替えでは、古い拡張機能は自分の `session_shutdown` で受け口を閉じ、新しい拡張機能が開き直す。
 - **受け口**
   - 1行ずつ読み、`pi.sendMessage({ customType: "catchball", content, display: true }, { triggerTurn: true, deliverAs: "followUp" })` を呼ぶ。
 - **`session_shutdown`**
@@ -153,6 +174,8 @@ flowchart LR
 | 受け口がない（拡張機能が入っていない、など） | ブリッジが `error` を返す。ブローカーが 30 秒・2 分・10 分で送り直し、3 回続けて失敗すると「要注意」になる |
 | Esc で中断して、待っていた通知が流れた | 未取得が残るので、5 分後の再通知で受信される（実物で確かめる） |
 | Pi を終了した | ブリッジも終わり、切断になる。起動して参加し直すと、再接続の通知が出る |
+| `/new`・`/resume`・fork・`/reload` | ブリッジが起動し直される（§1.5）。会話の中から参加していた場合は、参加していない状態に戻り、ブローカーでは切断になる。未取得は残る。同じ ID で `channel_join` し直せば（切断中の ID は引き継げる。`core.selfJoin`）、再接続の通知が出る。Claude の `/clear` ではブリッジは起動し直されないので、ここは Claude と違う。OPERATIONS に「切り替えたら参加し直す」と書く |
+| ブリッジの親が Pi でない（バージョン管理の道具の中継など） | 受け口が見つからないので、ブリッジが `error` を返す（受け口がないときと同じ）。§3 のとおり、`command` に node の実体の絶対パスを書いてもらう |
 
 ## 6. 安全性（AGENTS.md の決まりとの関係）
 
@@ -167,13 +190,15 @@ flowchart LR
 
 受け口に流れるのは、本文のない通知文だけです。誰かが偽の通知を書き込めても、Pi に受信を促すだけで、本文もブリッジの権限も得られません。
 
+複数のユーザーが使う Linux では、受け口は共有の一時フォルダー（`/tmp`）にでき、名前も予想できます。ほかのユーザーが先に同じ名前の受け口を作ると、通知が届かなくなるか、通知文（件数と送信元の ID。本文なし）がそのユーザーに渡ります。Catchball は1人で使う PC を前提にしているので、受け入れます。
+
 ## 7. 実装の順番
 
 1. ブリッジの2か所。自動試験（仕様書 §5 の 1）。
 2. 拡張機能。自動試験（仕様書 §5 の 2）。
-3. 実物の Pi（Haiku）での結合試験。Windows の名前付きパイプとプロセス番号の一致は、R-1（Windows での確認）で確かめる。`docs/verification/` に記録する。
+3. 実物の Pi（Haiku）での結合試験。`docs/verification/` に記録する。Windows の名前付きパイプとプロセス番号の一致（バージョン管理の道具を使う場合も含む）は、R-1（Windows での確認）で確かめる。
 4. ドキュメント：
-   - ARCHITECTURE、OPERATIONS（Pi の登録と拡張機能の入れ方）、MCP_TOOLS
+   - ARCHITECTURE、OPERATIONS（Pi の登録と拡張機能の入れ方、`command` に node の実体のパスを書く場合、`/new` などのあとは参加し直すこと）、MCP_TOOLS
    - DECISIONS（新しい D 番号）、REQUIREMENTS、ROADMAP（F-5 を片付ける）、CHANGELOG
    - README（日本語と英語）
 
