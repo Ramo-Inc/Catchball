@@ -2,6 +2,7 @@
 
 - 状態：**合意済み・未実装**（2026-11-02、ユーザーとの質疑で決定。同日、コードとの突き合わせのレビューを反映）
 - 対象のバージョン：v1.0.0-alpha.1 の次
+- 前提となる決定事項は [role-id-takeover-decisions.md](role-id-takeover-decisions.md)。この仕様書は、その決定を実装に落としたもの
 - 実装が終わったら、この文書の状態を「実装済み」にし、内容を ARCHITECTURE・OPERATIONS・MCP_TOOLS・DECISIONS に反映する
 
 ## 1. 困っていること
