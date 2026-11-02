@@ -59,3 +59,11 @@ export function checkAgentId(raw: unknown): string {
   }
   return raw;
 }
+
+// ルームの ID（D-018）：英字（大文字・小文字）・数字・ハイフン・ドット・アンダースコアの1〜32文字。空白は使えない。大文字と小文字は区別する
+export function checkRoomId(raw: unknown): string {
+  if (typeof raw !== 'string' || !/^[A-Za-z0-9._-]{1,32}$/.test(raw)) {
+    throw new ApiError('INVALID_ARGUMENT', 400, 'ルームの ID は、英字・数字・ハイフン・ドット・アンダースコアの1〜32文字にしてください（空白は使えません）。');
+  }
+  return raw;
+}

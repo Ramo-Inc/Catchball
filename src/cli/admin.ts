@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 管理者用 CLI（DESIGN §6.5）。モデルのツールには公開しない
-import { existsSync, readFileSync, writeFileSync, unlinkSync, appendFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, appendFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { hostname, networkInterfaces } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { sha256 } from '../shared/ids.js';
@@ -13,11 +13,12 @@ import { dataDir, ensureDataDir, loadConfig, Provider, Duty, TokenFile } from '.
 
 const USAGE = `使い方:
   session-mail-admin serve                         ブローカーを起動する
-  session-mail-admin provision --agent <id> --provider codex|claude --conversation <会話ID> [--duty coordinator|worker] [--rotate]
+  session-mail-admin provision --room <ルーム> --agent <id> --provider codex|claude --conversation <会話ID> [--duty coordinator|worker] [--rotate]
   session-mail-admin viewer-token [--rotate]      WebUI のログイン用トークンを表示する
-  session-mail-admin status                        参加者の状態を表示する
-  session-mail-admin probe <agent_id> [--wait 120] 自動受信を確認する（通知を出し、受信されるまで待つ）
-  session-mail-admin export [--from ISO] [--to ISO] [--out file.json]`;
+  session-mail-admin status                        参加者の状態を表示する（全ルーム）
+  session-mail-admin probe <ルーム> <agent_id> [--wait 120] 自動受信を確認する（通知を出し、受信されるまで待つ）
+  session-mail-admin export [--room <ルーム>] [--from ISO] [--to ISO] [--out file.json]
+ルームの作成・削除・一覧は、AI に頼みます（MCP ツール channel_room_create・channel_room_delete・channel_rooms）。`;
 
 function parse(argv: string[]) {
   const o: Record<string, string> = {}; const rest: string[] = [];
@@ -30,7 +31,8 @@ function parse(argv: string[]) {
 
 const dir = () => ensureDataDir();
 const lockPath = () => join(dir(), 'broker.lock');
-const dbPath = () => join(dir(), 'session-mail.db');
+// ルームを入れた版（D-018）から、新しいファイルにする。前の session-mail.db は読まずに、そのまま置いておく
+const dbPath = () => join(dir(), 'session-mail-v2.db');
 
 function brokerRunning(): boolean {
   if (!existsSync(lockPath())) return false;
@@ -40,8 +42,15 @@ function brokerRunning(): boolean {
 
 function writeSecret(name: string, content: string): string {
   const p = join(dir(), 'tokens', name);
+  mkdirSync(dirname(p), { recursive: true, mode: 0o700 });
   writeFileSync(p, content, { mode: 0o600 });
   return p;
+}
+
+// ルームごとのトークンファイルのフォルダー名。ルームの ID は大文字と小文字を区別するが、Windows と macOS のファイル名は区別しないので、
+// 大文字は「!＋小文字」、ドットは「~」に置き換える（「..」や末尾のドットがフォルダー名として特別扱いされないようにもする）
+function roomFolder(room: string): string {
+  return 'room-' + room.replace(/[A-Z]/g, c => '!' + c.toLowerCase()).replace(/\./g, '~');
 }
 
 function adminToken(): string { return readFileSync(join(dir(), 'tokens', 'admin.token'), 'utf8').trim(); }
@@ -72,10 +81,12 @@ async function main(): Promise<number> {
     case 'serve': {
       if (brokerRunning()) { console.error('ブローカーはすでに起動しています。'); return 2; }
       writeFileSync(lockPath(), String(process.pid));
+      const fresh = !existsSync(dbPath());
       const db = new Db(dbPath());
       const core = new Core(db, cfg);
-      if (!existsSync(join(dir(), 'tokens', 'admin.token'))) writeSecret('admin.token', core.createCredential('admin'));
-      if (!existsSync(join(dir(), 'tokens', 'viewer.token'))) writeSecret('viewer.token', core.createCredential('viewer'));
+      // 管理用・閲覧用のトークンは DB の記録とひも付く。新しい DB を作ったときは発行し直す（前のファイルは使えないため）
+      if (fresh || !existsSync(join(dir(), 'tokens', 'admin.token'))) writeSecret('admin.token', core.createCredential('admin'));
+      if (fresh || !existsSync(join(dir(), 'tokens', 'viewer.token'))) writeSecret('viewer.token', core.createCredential('viewer'));
       const logFile = join(dir(), 'logs', 'broker.log');
       const log = (s: string) => { const line = `${new Date().toISOString()} ${s}`; console.log(line); appendFileSync(logFile, line + '\n'); };
       const notifier = new Notifier(core, log);
@@ -110,13 +121,14 @@ async function main(): Promise<number> {
     }
     case 'provision': {
       const provider = o.provider as Provider, duty = (o.duty ?? 'worker') as Duty;
-      if (!o.agent || !['codex', 'claude'].includes(provider) || !o.conversation || !['coordinator', 'worker'].includes(duty)) { console.error(USAGE); return 2; }
-      const token = brokerRunning()
-        ? (await adminCall('POST', '/api/admin/provision', { agent: o.agent, provider, conversation: o.conversation, duty, rotate: o.rotate === 'true' })).token
-        : withCore(core => core.provision({ agent: o.agent, provider, conversation: o.conversation, duty, rotate: o.rotate === 'true' }));
-      const tf: TokenFile = { version: 1, broker_url: `http://127.0.0.1:${cfg.port}`, agent_id: o.agent, provider, duty, token };
-      const p = writeSecret(`${o.agent}.json`, JSON.stringify(tf, null, 2));
-      console.log(`登録しました: ${o.agent}（${provider}、${duty}）\nトークンファイル: ${p}\n`);
+      if (!o.room || !o.agent || !['codex', 'claude'].includes(provider) || !o.conversation || !['coordinator', 'worker'].includes(duty)) { console.error(USAGE); return 2; }
+      const args = { room: o.room, agent: o.agent, provider, conversation: o.conversation, duty, rotate: o.rotate === 'true' };
+      const { token, room } = brokerRunning()
+        ? await adminCall('POST', '/api/admin/provision', args)
+        : withCore(core => core.provision(args));
+      const tf: TokenFile = { version: 2, broker_url: `http://127.0.0.1:${cfg.port}`, room, agent_id: o.agent, provider, duty, token };
+      const p = writeSecret(join(roomFolder(room), `${o.agent}.json`), JSON.stringify(tf, null, 2));
+      console.log(`登録しました: ルーム ${room} の ${o.agent}（${provider}、${duty}）\nトークンファイル: ${p}\n`);
       if (provider === 'codex') {
         console.log(`起動コマンド（PowerShell / bash 共通）:\n  codex resume ${o.conversation} -c "mcp_servers.session_mail.env.SESSION_MAIL_TOKEN_FILE='${p.replace(/\\/g, '/')}'"`);
       } else {
@@ -135,20 +147,20 @@ async function main(): Promise<number> {
     case 'status': {
       const s = await adminCall('GET', '/api/admin/status');
       for (const m of s.members) {
-        const n = s.notify.find((x: any) => x.agent_id === m.id);
-        console.log(`${m.id.padEnd(11)} ${m.provider.padEnd(6)} ${(m.display_name ?? '-').padEnd(10)} ${m.membership.padEnd(11)} ${m.connection.padEnd(7)} 自動受信:${m.auto_receive.padEnd(10)} 未取得:${m.pending_count}  ${m.reason ?? ''}${n?.last_notify_error ? '  通知エラー:' + n.last_notify_error : ''}`);
+        const n = s.notify.find((x: any) => x.room === m.room && x.agent_id === m.id);
+        console.log(`${m.room.padEnd(12)} ${m.id.padEnd(11)} ${m.provider.padEnd(6)} ${(m.display_name ?? '-').padEnd(10)} ${m.membership.padEnd(11)} ${m.connection.padEnd(7)} 自動受信:${m.auto_receive.padEnd(10)} 未取得:${m.pending_count}  ${m.reason ?? ''}${n?.last_notify_error ? '  通知エラー:' + n.last_notify_error : ''}`);
       }
       return 0;
     }
     case 'probe': {
-      const id = rest[0];
-      if (!id) { console.error(USAGE); return 2; }
-      const r = await adminCall('POST', '/api/admin/probe', { agent_id: id });
+      const [room, id] = rest;
+      if (!room || !id) { console.error(USAGE); return 2; }
+      const r = await adminCall('POST', '/api/admin/probe', { room, agent_id: id });
       console.log(`確認の通知を送りました（${r.result}）。受信を待っています…`);
       const until = Date.now() + Number(o.wait ?? 120) * 1000;
       while (Date.now() < until) {
         await new Promise(res => setTimeout(res, 2000));
-        const m = (await adminCall('GET', '/api/admin/status')).members.find((x: any) => x.id === id);
+        const m = (await adminCall('GET', '/api/admin/status')).members.find((x: any) => x.room === room && x.id === id);
         if (m?.auto_receive === 'verified') { console.log(`自動受信 確認済み（${id}）`); return 0; }
       }
       console.log(`時間内に受信を確認できませんでした（${id}）。通知: ${r.result}`);
@@ -156,6 +168,7 @@ async function main(): Promise<number> {
     }
     case 'export': {
       const q = new URLSearchParams();
+      if (o.room) q.set('room', o.room);
       if (o.from) q.set('from', o.from);
       if (o.to) q.set('to', o.to);
       const data = await adminCall('GET', `/api/admin/export?${q}`);

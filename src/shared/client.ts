@@ -3,7 +3,7 @@ import { TokenFile } from './config.js';
 
 export interface CallResult { ok: boolean; status: number; data: any }
 
-export async function call(tf: TokenFile, method: 'GET' | 'POST', path: string, body?: unknown, retryOnNetworkError = false): Promise<CallResult> {
+export async function call(tf: Pick<TokenFile, 'broker_url' | 'token'>, method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, retryOnNetworkError = false): Promise<CallResult> {
   const attempt = async (): Promise<CallResult> => {
     const res = await fetch(tf.broker_url + path, {
       method,
