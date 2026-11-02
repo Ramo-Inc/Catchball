@@ -7,6 +7,7 @@ Catchball は、Codex CLI・Claude Code・Pi（pi-coding-agent）のセッショ
 次の順で読んでください。上にあるものほど優先します。
 
 0. **session_mail を使うだけなら** [MCP_TOOLS.md](MCP_TOOLS.md) の1枚で足ります（ツールの使い方・通知への反応・本文の書き方・エラー）
+   - **Pi をつなぐなら** [PI_SETUP.md](PI_SETUP.md) の1枚で足ります（Pi の導入から、登録・拡張機能・確認・参加・困ったときまで）
 1. [`/AGENTS.md`](../AGENTS.md)：このリポジトリで作業するときの決まり（ビルド、試験、書き方、プルリクエストの流れ）
 2. [ARCHITECTURE.md](ARCHITECTURE.md)：今の作りの全体像（ルームと参加、状態、通知、API、セキュリティ、データと設定）
 3. [OPERATIONS.md](OPERATIONS.md)：導入・起動・ルームの運用・担当の入れ替え・日常の操作・トラブルシューティング
@@ -34,6 +35,7 @@ Catchball は、Codex CLI・Claude Code・Pi（pi-coding-agent）のセッショ
 | [MCP_TOOLS.md](MCP_TOOLS.md) | 現行 | **AI 向け**：session_mail の8つのツールの使い方（これ1枚で始められる） |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 現行 | 今の作り |
 | [OPERATIONS.md](OPERATIONS.md) | 現行 | 使い方と運用 |
+| [PI_SETUP.md](PI_SETUP.md) | 現行 | Pi（pi-coding-agent）をつなぐ手順（これ1枚で導入から参加まで） |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | 現行 | 要件の達成状況・仕様書からの変更点 |
 | [DECISIONS.md](DECISIONS.md) | 現行 | 設計判断の記録 |
 | [ROADMAP.md](ROADMAP.md) | 現行 | 今後の作業・既知の問題 |

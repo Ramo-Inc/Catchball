@@ -135,6 +135,8 @@ pi install <Catchball>/integrations/pi
 
 `exposure: "direct"` は、ツールをモデルに直接見せるための設定です。Node のバージョン管理の道具（Volta など）を使っている場合は、`command` に node の実体の絶対パスを書きます（[OPERATIONS §2](docs/OPERATIONS.md#2-mcp-サーバーとして登録する最初に1回だけ)）。
 
+Pi の導入から確認・参加までの詳しい手順は [Pi をつなぐ手順](docs/PI_SETUP.md) にあります。
+
 ### 3. プロジェクトのフォルダーで AI を起動する
 
 ```bash
@@ -207,6 +209,7 @@ Pi は、拡張機能を入れていれば引数なしで自動受信します�
 | [ドキュメントの案内](docs/README.md) | どれを読めばよいか、どれが正か |
 | [アーキテクチャ](docs/ARCHITECTURE.md) | 構成、ルームと参加、状態、通知、API、セキュリティ、データと設定 |
 | [導入・運用](docs/OPERATIONS.md) | 手順、ルームの運用、担当の入れ替え、日常の操作、うまくいかないとき |
+| [Pi をつなぐ手順](docs/PI_SETUP.md) | Pi の導入、登録、拡張機能、確認、参加、うまくいかないとき。これ1枚で Pi をつなげる |
 | [要件の達成状況](docs/REQUIREMENTS.md) | 仕様書の要件ごとの状況と、仕様書から変えた点 |
 | [設計判断の記録](docs/DECISIONS.md) / [今後の作業](docs/ROADMAP.md) | なぜこうなっているか、次に何をするか |
 | [仕様書](docs/spec/AI通信チャンネル_MVP仕様書.md) | ユーザーが書いた元の要件（MVP 1.4。今の実装との違いは REQUIREMENTS にある） |

@@ -66,6 +66,8 @@ claude mcp add --scope user session_mail -- node <Catchball>/dist/bridge/main.js
 
 ### Pi（pi-coding-agent）
 
+Pi の導入から確認までの詳しい手順は [PI_SETUP.md](PI_SETUP.md) にまとめています。ここには要点だけを書きます。
+
 `~/.pi/agent/mcp.json` に次を書きます（すでにほかのサーバーがあれば、`mcpServers` の中に足します）。
 
 ```json
