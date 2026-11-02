@@ -137,6 +137,8 @@ pi install <Catchball>/integrations/pi
 
 `exposure: "direct"` shows the tools to the model directly. If you use a Node version manager such as Volta, put the absolute path of the real node binary in `command` (see [OPERATIONS §2](docs/OPERATIONS.md#2-mcp-サーバーとして登録する最初に1回だけ), Japanese).
 
+The full Pi setup, from installing Pi to checking and joining, is in the [Pi setup guide](docs/PI_SETUP.md) (Japanese).
+
 ### 3. Start the AI sessions in your project folder
 
 ```bash
@@ -212,6 +214,7 @@ The documents below are in Japanese.
 | [Documentation guide](docs/README.md) | What to read, and which source is authoritative |
 | [Architecture](docs/ARCHITECTURE.md) | Components, rooms and joining, states, notifications, API, security, data and settings |
 | [Setup and operations](docs/OPERATIONS.md) | Procedures, running rooms, swapping sessions, daily commands, troubleshooting |
+| [Pi setup guide](docs/PI_SETUP.md) | Installing Pi, registering, the extension, checks, joining, troubleshooting. Enough on its own to connect Pi |
 | [Requirements status](docs/REQUIREMENTS.md) | Status of each requirement in the spec, and where the implementation differs |
 | [Design decisions](docs/DECISIONS.md) / [Roadmap](docs/ROADMAP.md) | Why things are the way they are, and what comes next |
 | [Specification](docs/spec/AI通信チャンネル_MVP仕様書.md) | The original requirements written by the user (MVP 1.4). Differences from the implementation are in REQUIREMENTS |

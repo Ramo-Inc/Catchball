@@ -4,7 +4,7 @@ Catchball は、Codex CLI・Claude Code・Pi（pi-coding-agent）のセッショ
 
 ## まず読むもの
 
-**session_mail のツールを使って作業するだけなら**、[docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) の1枚を読めば始められます。このリポジトリのコードを直す場合は、次の順に読んでください。
+**session_mail のツールを使って作業するだけなら**、[docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) の1枚を読めば始められます。Pi をつなぐ（導入する）なら、[docs/PI_SETUP.md](docs/PI_SETUP.md) の1枚で足ります。このリポジトリのコードを直す場合は、次の順に読んでください。
 
 1. [docs/README.md](docs/README.md)：ドキュメントの地図と「どれが正か」
 2. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：今の作り
