@@ -54,7 +54,7 @@ npm test         # build してから test/main.test.mjs を実行（26件）
 - 動き・設定・API を変えたら、`docs/ARCHITECTURE.md`・`docs/OPERATIONS.md`・`CHANGELOG.md` を更新する。要件の状況が変わったら `docs/REQUIREMENTS.md`、判断をしたら `docs/DECISIONS.md` に追記、作業が片付いたら `docs/ROADMAP.md` を更新する。
 - `docs/spec/`（ユーザーが書いた元の仕様書）は書き換えない。仕様から変えた点は `docs/REQUIREMENTS.md` の「仕様書から変えた点」に書く。
 - `docs/archive/` と `poc/` は履歴なので、直さない。
-- ドキュメントは日本語で、平易に書く。
+- ドキュメントは日本語で、平易に書く。ただし、README には英語版（`README.en.md`）がある。README を変えたら、英語版も同じ内容に直す。
 
 **Git**
 - `main` から作業ブランチを作り、プルリクエストを経て `main` に取り込む。このリポジトリは作業者が1人なので、試験が通っていれば、作業した AI がプルリクエストを作って取り込んでよい。取り込んだブランチは GitHub が自動で消す。
