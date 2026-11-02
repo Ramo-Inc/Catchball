@@ -169,6 +169,16 @@ test('WebUI：ログイン、一覧、取得（既読）による更新を増分
   assert.ok(upd.deliveries.find(d => d.recipient_id === 'sub1').state === 'acked');
   const mem = await req('GET', '/api/members?room=r1', { cookie });
   assert.equal(mem.data.members.length, 4);
+  // 1回で返しきれない増分は、続きから取り直せば取りこぼさない
+  const sent = [];
+  for (let i = 0; i < 3; i++) sent.push((await A('main', 'send', { to: 'sub1', body: `[状況] 増分 ${i}`, client_message_id: `main-ui-more-${i}` })).data.message_id);
+  const p1 = await req('GET', `/api/messages?room=r1&since_seq=${inc.data.max_seq}&limit=2`, { cookie });
+  assert.equal(p1.data.messages.length, 2);
+  assert.equal(p1.data.has_more, true, '続きがある');
+  const p2 = await req('GET', `/api/messages?room=r1&since_seq=${p1.data.max_seq}&limit=2`, { cookie });
+  assert.equal(p2.data.has_more, false);
+  assert.deepEqual([...p1.data.messages, ...p2.data.messages].map(m => m.message_id), sent, '2回に分けても3件すべて取れる');
+  await A('sub1', 'receive', { limit: 50 });
 });
 
 test('MCP ブリッジ：8ツール、Claude には channel 通知、Codex には codex queue', async () => {
@@ -384,7 +394,7 @@ test('ルーム：作成・一覧・削除と ID の決まり（参加してい�
   assert.equal(made.data.room, 'Proj');
   assert.equal((await b.call('channel_room_create', { room: 'Proj' })).data.error.code, 'ROOM_EXISTS');
   assert.equal((await b.call('channel_room_create', { room: 'proj' })).isError, false, '大文字と小文字は別のルーム');
-  for (const bad of ['a b', 'x'.repeat(33), '開発', '', ' proj2']) {
+  for (const bad of ['a b', 'x'.repeat(33), '開発', '', ' proj2', '.', '..']) {
     assert.equal((await J('POST', 'rooms', { room: bad })).data.error.code, 'INVALID_ARGUMENT', `「${bad}」は断る`);
   }
   assert.equal((await J('POST', 'rooms', { room: 'y'.repeat(32) })).status, 200);
