@@ -24,7 +24,6 @@ export interface Config {
   port: number;
   // WebUI（閲覧専用）を同じネットワーク内の別 PC に公開する設定。AI 用・管理用の API は常にこの PC のみ
   ui: { lan: boolean; port: number; allowed_hosts: string[] };
-  channel_id: string;
   heartbeat_interval_ms: number;
   offline_after_ms: number;
   notify: {
@@ -41,7 +40,6 @@ export interface Config {
 export const DEFAULT_CONFIG: Config = {
   port: 47821,
   ui: { lan: true, port: 47822, allowed_hosts: [] },
-  channel_id: 'dev',
   heartbeat_interval_ms: 5000,
   offline_after_ms: 30000,
   notify: {
@@ -68,9 +66,11 @@ export function loadConfig(): Config {
   };
 }
 
+// トークンファイル（provision が作る）。版 2 からルームを持つ。版 1 は新しい DB では使えないので読まない
 export interface TokenFile {
-  version: 1;
+  version: 2;
   broker_url: string;
+  room: string;
   agent_id: string;
   provider: Provider;
   duty: Duty;
@@ -79,5 +79,9 @@ export interface TokenFile {
 
 export function readTokenFile(path: string | undefined): TokenFile | null {
   if (!path || !existsSync(path)) return null;
-  return JSON.parse(readFileSync(path, 'utf8')) as TokenFile;
+  const tf = JSON.parse(readFileSync(path, 'utf8'));
+  if (tf.version !== 2 || typeof tf.room !== 'string') {
+    throw new Error(`トークンファイル ${path} は古い形式です（ルームがありません）。session-mail-admin provision --room で作り直してください。`);
+  }
+  return tf as TokenFile;
 }

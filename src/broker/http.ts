@@ -48,21 +48,35 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
   };
   const ui = (c: Ctx) => core.verify(c.cookie, 'ui_session');
   const admin = (c: Ctx) => core.verify(c.token, 'admin');
+  // この PC の参加用キー（会話の中からの参加と、ルームの操作に使う）
+  const joinKey = (c: Ctx) => {
+    if (!joinKeyHash || !c.token || !safeEqualHex(sha256(c.token), joinKeyHash)) {
+      throw new ApiError('UNAUTHENTICATED', 401, '参加用のキーが正しくありません。', 'ブローカーと同じ PC・同じユーザーで起動しているか確認してください。');
+    }
+  };
 
   const routes: Record<string, (c: Ctx, m: RegExpMatchArray) => unknown> = {
     // ---- AI 向け ----
     // 会話の中から参加する（トークンファイルなしで起動したブリッジが、この PC の参加用キーで呼ぶ）
     'POST /api/join/self': c => {
-      if (!joinKeyHash || !c.token || !safeEqualHex(sha256(c.token), joinKeyHash)) {
-        throw new ApiError('UNAUTHENTICATED', 401, '参加用のキーが正しくありません。', 'ブローカーと同じ PC・同じユーザーで起動しているか確認してください。');
-      }
-      const r = core.selfJoin(c.body);
-      log(`self-join ${r.agent_id}（${r.provider}）${r.self.display_name}`);
+      joinKey(c);
+      const { pid, ...r } = core.selfJoin(c.body);
+      log(`self-join ${r.room}/${r.agent_id}（${r.provider}）${r.self.display_name}`);
       // 参加した直後に自動受信を確認する（ブリッジが接続するのを待ってから）
       setTimeout(() => {
-        const p = core.participant(r.agent_id);
-        if (p && core.isOnline(p) && p.receiver_state !== 'not_configured') notifier.probe(r.agent_id).catch(() => {});
+        const p = core.byPid(pid);
+        if (p && core.isOnline(p) && p.receiver_state !== 'not_configured') notifier.probe(pid).catch(() => {});
       }, 8000).unref();
+      return r;
+    },
+    // ルームの作成・一覧・削除（MCP ツールから、参加用キーで呼ぶ。D-018）
+    'POST /api/join/rooms': c => { joinKey(c); const r = core.createRoom(c.body.room); log(`room create ${r.room}`); return r; },
+    'GET /api/join/rooms': c => { joinKey(c); return core.listRooms(); },
+    'DELETE /api/join/rooms/:room': (c, m) => {
+      joinKey(c);
+      const { pids, ...r } = core.deleteRoom((() => { try { return decodeURIComponent(m[1]); } catch { return m[1]; } })());
+      for (const pid of pids) notifier.pendingChannel.delete(pid);
+      log(`room delete ${r.room}`);
       return r;
     },
     'POST /api/agent/connect': c => core.connect(core.agentFromToken(c.token), c.body),
@@ -70,16 +84,16 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
       const a = core.agentFromToken(c.token);
       core.heartbeat(a, c.body.generation);
       for (const r of Array.isArray(c.body.notify_results) ? c.body.notify_results : []) {
-        notifier.record(a.agent_id, String(r.notify_id), null, r.result === 'written' ? 'written' : 'error', r.error ?? null);
+        notifier.record(a.pid, String(r.notify_id), null, r.result === 'written' ? 'written' : 'error', r.error ?? null);
       }
-      const notify = notifier.pendingChannel.get(a.agent_id) ?? null;
-      notifier.pendingChannel.delete(a.agent_id);
+      const notify = notifier.pendingChannel.get(a.pid) ?? null;
+      notifier.pendingChannel.delete(a.pid);
       return { ok: true, notify };
     },
     'POST /api/agent/disconnect': c => { core.disconnect(core.agentFromToken(c.token), c.body.generation); return { ok: true }; },
     'POST /api/agent/activity': c => { core.setActivity(core.agentFromToken(c.token), c.body.state); return { ok: true }; },
     'POST /api/agent/join': c => core.join(agent(c), c.body.display_name, c.body.role),
-    'GET /api/agent/members': c => { const a = agent(c); return { channel_id: core.cfg.channel_id, self_id: a.agent_id, members: core.members(a.agent_id) }; },
+    'GET /api/agent/members': c => { const a = agent(c); return { room: a.room_id, self_id: a.agent_id, members: core.members(a.room_id, a.pid) }; },
     'POST /api/agent/send': c => core.send(agent(c), c.body),
     'POST /api/agent/receive': c => core.receive(agent(c), c.body.limit),
     'POST /api/agent/leave': c => {
@@ -107,32 +121,43 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
     },
     'POST /api/ui/logout': c => { c.res.setHeader('Set-Cookie', 'sm_ui=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'); return { ok: true }; },
     'GET /api/health': c => { ui(c); return { ok: true, now: core.now(), max_seq: core.maxSeq() }; },
-    'GET /api/members': c => { ui(c); return { channel_id: core.cfg.channel_id, now: core.now(), members: core.members(null, true) }; },
+    'GET /api/ui/rooms': c => { ui(c); return { rooms: core.db.all('SELECT room_id AS room, created_at FROM rooms ORDER BY room_id') }; },
+    'GET /api/members': c => {
+      ui(c);
+      const room = core.requireRoom(c.url.searchParams.get('room') ?? undefined);
+      return { room, now: core.now(), members: core.members(room, null, true) };
+    },
     'GET /api/messages': c => {
       ui(c);
       const g = (k: string) => c.url.searchParams.get(k);
-      return core.listMessages({ limit: g('limit'), before_seq: g('before_seq'), since_seq: g('since_seq'), participant: g('participant'), kind: g('kind'), q: g('q') });
+      return core.listMessages(g('room') ?? undefined, { limit: g('limit'), before_seq: g('before_seq'), since_seq: g('since_seq'), participant: g('participant'), kind: g('kind'), q: g('q') });
     },
     'GET /api/messages/:id': (c, m) => { ui(c); return core.getMessage(m[1]); },
 
     // ---- 管理者向け ----
-    'POST /api/admin/probe': async c => { admin(c); return notifier.probe(String(c.body.agent_id)); },
+    'POST /api/admin/probe': async c => {
+      admin(c);
+      const room = core.requireRoom(c.body.room);
+      const p = core.participantIn(room, String(c.body.agent_id));
+      if (!p) throw new ApiError('UNKNOWN_RECIPIENT', 404, `${c.body.agent_id} はルーム ${room} に登録されていません。`);
+      return notifier.probe(p.pid);
+    },
     'POST /api/admin/provision': c => {
       admin(c);
       const b = c.body;
       if (!['codex', 'claude'].includes(b.provider) || !['coordinator', 'worker'].includes(b.duty) || typeof b.conversation !== 'string' || !b.conversation) {
         throw new ApiError('INVALID_ARGUMENT', 400, 'provider・duty・conversation を正しく指定してください。');
       }
-      return { token: core.provision({ agent: b.agent, provider: b.provider, conversation: b.conversation, duty: b.duty, rotate: b.rotate === true }) };
+      return core.provision({ room: b.room, agent: b.agent, provider: b.provider, conversation: b.conversation, duty: b.duty, rotate: b.rotate === true });
     },
     'GET /api/admin/status': c => {
       admin(c);
-      return { members: core.members(null, true), notify: core.db.all('SELECT * FROM notify_state ORDER BY agent_id') };
+      return { members: core.allMembers(), notify: core.db.all('SELECT p.room_id AS room, p.agent_id, n.* FROM notify_state n JOIN participants p USING (pid) ORDER BY p.room_id, p.agent_id') };
     },
     'GET /api/admin/export': c => {
       admin(c);
       const f = c.url.searchParams.get('from'), t = c.url.searchParams.get('to');
-      return core.export(f ? Date.parse(f) : 0, t ? Date.parse(t) : undefined);
+      return core.export(c.url.searchParams.get('room'), f ? Date.parse(f) : 0, t ? Date.parse(t) : undefined);
     },
   };
 
@@ -140,7 +165,7 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
     for (const [key, fn] of Object.entries(routes)) {
       const [mth, pattern] = key.split(' ');
       if (mth !== method) continue;
-      const re = new RegExp('^' + pattern.replace(/:id/g, '(m_[0-9A-Z]{26})') + '$');
+      const re = new RegExp('^' + pattern.replace(/:id/g, '(m_[0-9A-Z]{26})').replace(/:room/g, '([^/]+)') + '$');
       const m = path.match(re);
       if (m) return [fn, m];
     }

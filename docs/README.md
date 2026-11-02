@@ -31,13 +31,13 @@ Catchball は、Codex CLI と Claude Code のセッションをつなぐ、AI �
 
 | ファイル | 種類 | 内容 |
 |---|---|---|
-| [MCP_TOOLS.md](MCP_TOOLS.md) | 現行 | **AI 向け**：session_mail の5つのツールの使い方（これ1枚で始められる） |
+| [MCP_TOOLS.md](MCP_TOOLS.md) | 現行 | **AI 向け**：session_mail の8つのツールの使い方（これ1枚で始められる） |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 現行 | 今の作り |
 | [OPERATIONS.md](OPERATIONS.md) | 現行 | 使い方と運用 |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | 現行 | 要件の達成状況・仕様書からの変更点 |
 | [DECISIONS.md](DECISIONS.md) | 現行 | 設計判断の記録 |
 | [ROADMAP.md](ROADMAP.md) | 現行 | 今後の作業・既知の問題 |
-| [design/](design/) | 計画 | これから実装する機能の仕様と実装プラン（状態を各文書の先頭に書く）。[role-id-takeover.md](design/role-id-takeover.md)（役割の ID と担当の入れ替え、実装済み）、[rooms.md](design/rooms.md)（ルーム、計画） |
+| [design/](design/) | 計画 | これから実装する機能の仕様と実装プラン（状態を各文書の先頭に書く）。[role-id-takeover.md](design/role-id-takeover.md)（役割の ID と担当の入れ替え、実装済み）、[rooms.md](design/rooms.md)（ルーム、実装済み） |
 | [spec/](spec/) | 入力 | ユーザーが作成した元の仕様書（MVP 1.4）。**書き換えない** |
 | [verification/](verification/) | 記録 | PoC とデモの検証記録・証跡 |
 | [archive/](archive/) | 履歴 | 初期の設計書・実装計画・運用手順・レビュー・PoC の手順書。**今の実装とは異なる箇所がある**ので、経緯の確認にだけ使う |

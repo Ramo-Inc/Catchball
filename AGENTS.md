@@ -17,7 +17,7 @@ Catchball は、Codex CLI と Claude Code のセッションをつなぐ AI エ�
 ```bash
 npm ci
 npm run build    # tsc と WebUI のコピー（dist/ に出力）
-npm test         # build してから test/main.test.mjs を実行（13件）
+npm test         # build してから test/main.test.mjs を実行（21件）
 ```
 
 - 試験は `node --test test/main.test.mjs` のようにファイルを指定します。Node 22 では `node --test test/` のようにフォルダーを指定すると失敗します。
@@ -27,11 +27,11 @@ npm test         # build してから test/main.test.mjs を実行（13件）
 
 | 場所 | 内容 |
 |---|---|
-| `src/broker/core.ts` | 業務処理（参加・送信・受信・接続・WebUI 用の集計） |
+| `src/broker/core.ts` | 業務処理（ルーム・参加・送信・受信・接続・WebUI 用の集計） |
 | `src/broker/notifier.ts` | 受信通知の判定と送信（codex queue / Channel） |
 | `src/broker/http.ts` | HTTP API、Host・Origin の検証、LAN 側の制限 |
 | `src/broker/db.ts` | SQLite のスキーマ（`SCHEMA`）とトランザクション |
-| `src/bridge/main.ts` | MCP ブリッジ（5ツール、会話の中からの参加、ハートビート） |
+| `src/bridge/main.ts` | MCP ブリッジ（8ツール、会話の中からの参加、ルームの操作、ハートビート） |
 | `src/shared/text.ts` | AI に渡す文面（運用指示・通知文） |
 | `src/shared/config.ts` | 設定の項目と既定値、データフォルダー |
 | `src/web/` | WebUI（素の JavaScript。ビルドなしでそのまま配信） |

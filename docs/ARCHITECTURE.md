@@ -15,29 +15,40 @@
 | 部品 | 場所 | 役割 |
 |---|---|---|
 | ブローカー | `src/broker/`（起動は `session-mail-admin serve`） | 認証、メッセージの保存と配送、接続状態、通知、HTTP API、WebUI の配信。DB を開くのはこのプロセスだけ |
-| ブリッジ | `src/bridge/main.ts` | 各 AI セッションが stdio で起動する MCP サーバー。5つのツールを提供し、5秒ごとにハートビートを送る。Claude には Channel 通知を送る |
+| ブリッジ | `src/bridge/main.ts` | 各 AI セッションが stdio で起動する MCP サーバー。8つのツール（ルームの操作3つを含む）を提供し、5秒ごとにハートビートを送る。Claude には Channel 通知を送る |
 | AI 用 CLI | `src/cli/session-mail.ts` | ブリッジと同じ5操作を、コマンドで実行する（人の確認作業やデバッグ用） |
-| 管理用 CLI | `src/cli/admin.ts` | serve / provision / viewer-token / status / probe / export。AI のツールには出さない |
-| WebUI | `src/web/` | 閲覧専用の画面。本文は `textContent` だけで表示する |
+| 管理用 CLI | `src/cli/admin.ts` | serve / provision / viewer-token / status / probe / export。AI のツールには出さない。ルームは作らない |
+| WebUI | `src/web/` | 閲覧専用の画面。上部でルームを選び、そのルームの参加者とメッセージを表示する（選んだルームはブラウザーに覚える）。本文は `textContent` だけで表示する |
 | 共通 | `src/shared/` | 設定、入力の検証、ID とトークン、AI に渡す文面、HTTP クライアント |
 
 技術：TypeScript、Node.js 22.13 以上（`node:sqlite` を使う）、`@modelcontextprotocol/sdk` 1.32.2、`zod` 3.25.76。Web フレームワークは使わず、`node:http` で書いています。
 
-## 2. 参加のしかた（識別）
+## 2. ルームと参加のしかた（識別）
+
+**ルーム**（D-018）：参加者は、ルームの中で動きます。
+- ルームは ID だけで識別します（英字・数字・`-`・`.`・`_` の1〜32文字、大文字と小文字は区別する）。
+- 参加者は「ルームと ID の組み」で決まります。ルーム A の `dev` とルーム B の `dev` は別の参加者です。内部では参加者ごとの番号（`participants.pid`）で指します。
+- 宛先の ID・全員宛て・参加者の一覧・表示名の重複の判定は、ルームの中だけで行います。ルームをまたいだ送信はしません。
+- 1つのセッション（ブリッジ）が同時に入れるのは1つのルームだけです。会話の中から参加したブリッジは、`channel_leave` で退出すると参加していない状態に戻り（切断を伝え、キーを捨てる）、別のルームや別の ID に参加し直せます。
+- ルームの作成・一覧・削除は、MCP ツール（`channel_room_create`・`channel_rooms`・`channel_room_delete`）から、参加用キーで行います（`/api/join/rooms`）。参加していなくても使えます。
+- 削除できるのは、参加中（`joined`）の参加者がいないときだけです（切断中も参加中に数え、登録だけの参加者は数えません）。断るときは `ROOM_NOT_EMPTY` です。削除すると、そのルームの参加者・トークン・メッセージ・配送・通知の状態を、外部キーの連動（`ON DELETE CASCADE`）ですべて消します。
+
 
 送信元は、ブローカーが発行した**参加者ごとのトークン**で決まります。AI が入力した値で送信元が決まることはありません。トークンの受け取り方は2通りあります。
 
 | 方法 | 流れ | 使う場面 |
 |---|---|---|
-| **会話の中から参加**（通常） | ブリッジはトークンなしで起動する → AI が `channel_join` を呼ぶ → ブリッジがデータフォルダーの `tokens/join.key`（参加用キー）を読み、`POST /api/join/self` を呼ぶ → ブローカーが、AI の指定した ID で登録し、トークンを返す。トークンはブリッジのメモリにだけ置く | ふつうの使い方 |
-| **トークンファイル** | `session-mail-admin provision` で参加者を登録し、`tokens/<id>.json` を作る → 環境変数 `SESSION_MAIL_TOKEN_FILE` でブリッジに渡して起動する | 起動スクリプトで固定したい場合 |
+| **会話の中から参加**（通常） | ブリッジはトークンなしで起動する → AI が `channel_join` を呼ぶ → ブリッジがデータフォルダーの `tokens/join.key`（参加用キー）を読み、`POST /api/join/self` を呼ぶ → ブローカーが、AI の指定したルームと ID で登録し、トークンを返す。トークンはブリッジのメモリにだけ置く | ふつうの使い方 |
+| **トークンファイル** | `session-mail-admin provision --room <ルーム>` で参加者を登録し、`tokens/room-<ルーム>/<id>.json` を作る → 環境変数 `SESSION_MAIL_TOKEN_FILE` でブリッジに渡して起動する | 起動スクリプトで固定したい場合 |
 
 会話の中から参加するときの規則（`Core.selfJoin`）：
 - `agent_id`（役割の ID）は必須です。省略すると `INVALID_ARGUMENT` で断り、「ユーザーに尋ねる」よう案内します（D-017）。ブリッジのツール定義でも必須にしています（トークンファイルで起動したブリッジを除く）。
+- `room` も必須です。省略すると `INVALID_ARGUMENT`、ないルームなら `ROOM_NOT_FOUND` で断り、どちらも「ルームを自分で作らず、ユーザーに尋ねる」よう案内します。
 - Codex は `conversation_id`（`$CODEX_THREAD_ID` の値）が必須で、ないと断ります。会話 ID は、その参加で指定されたものだけを使います（前の値は残しません）。Claude は不要です。
+- 以下の判定は、すべて指定したルームの中で行います。
 - 指定した `agent_id` が**接続中**なら、`AGENT_IN_USE` で断ります（案内は「別の ID は使わず、ユーザーに確認」）。接続していなければ（切断中・退出済み・未参加）、ハーネスが違っても入れます。そのとき、ハーネス・知らせ方・会話 ID を書き換え、古いトークンを失効させ、自動受信の状態を「未確認」に戻します。未取得のメッセージと統括の役目は、ID に付いたまま引き継がれます。
 - 検査・登録・失効・発行は1つのトランザクションで行います。表示名の重複などで断るときは、何も変わりません。参加した時点から、その ID は使用中（接続中）として扱います。
-- 参加済みのブリッジで違う `agent_id` を指定すると、ブリッジが断ります。
+- 参加済みのブリッジで違う `room` や `agent_id` を指定すると、ブリッジが断ります（会話の中から参加した場合は「先に channel_leave する」、トークンファイルの場合は「変えられない」と案内します）。
 - `coordinator: true` なら統括として登録し、統括用の運用指示を返します。
 - 参加の 8 秒後に、ブローカーが自動受信の確認（probe）を送ります。
 
@@ -96,13 +107,13 @@
 | 待ち受け | 載せている API |
 |---|---|
 | `127.0.0.1:47821`（この PC のみ） | すべての API と WebUI |
-| `0.0.0.0:47822`（`ui.lan` が true のとき、同じネットワークへ） | WebUI と閲覧用の API（`/api/ui/*`、`/api/health`、`/api/members`、`/api/messages*`）だけ。それ以外は 404 |
+| `0.0.0.0:47822`（`ui.lan` が true のとき、同じネットワークへ） | WebUI と閲覧用の API（`/api/ui/*`（ルームの一覧の閲覧を含む）、`/api/health`、`/api/members`、`/api/messages*`）だけ。それ以外は 404 |
 
 | 対象 | 認証 | API |
 |---|---|---|
-| 参加 | `Bearer <参加用キー>` | `POST /api/join/self` |
+| 参加・ルーム | `Bearer <参加用キー>` | `POST /api/join/self`、`POST /api/join/rooms`・`GET /api/join/rooms`・`DELETE /api/join/rooms/:room` |
 | AI | `Bearer <参加者のトークン>` | `POST /api/agent/connect`・`heartbeat`・`disconnect`・`activity`・`join`・`send`・`receive`・`leave`、`GET /api/agent/members` |
-| WebUI | Cookie `sm_ui`（ログインで発行、7 日間有効） | `POST /api/ui/login`・`logout`、`GET /api/health`・`members`・`messages`・`messages/:id` |
+| WebUI | Cookie `sm_ui`（ログインで発行、7 日間有効） | `POST /api/ui/login`・`logout`、`GET /api/health`・`ui/rooms`・`members?room=`・`messages?room=`・`messages/:id`（`members` と `messages` はルームの指定が必須） |
 | 管理 | `Bearer <admin.token>` | `POST /api/admin/probe`・`provision`、`GET /api/admin/status`・`export` |
 
 `GET /api/messages` の取得のしかた：
@@ -141,12 +152,12 @@
 
 ```text
 config.json          設定（なければ既定値）
-session-mail.db      SQLite（WAL）
+session-mail-v2.db   SQLite（WAL）。ルームを入れた版から新しいファイル。前の版の session-mail.db は読まずに残す
 broker.lock          多重起動の防止（pid）
-tokens/admin.token   管理用（serve が初回に作る）
-tokens/viewer.token  WebUI のログイン用（serve が初回に作る）
+tokens/admin.token   管理用（serve が初回、または新しい DB を作ったときに作る）
+tokens/viewer.token  WebUI のログイン用（serve が初回、または新しい DB を作ったときに作る）
 tokens/join.key      会話の中から参加するときの参加用キー（serve が初回に作る）
-tokens/<id>.json     provision で作るトークンファイル
+tokens/room-<ルーム>/<id>.json  provision で作るトークンファイル（版 2。フォルダー名では、大文字を「!＋小文字」、ドットを「~」に置き換える。大文字と小文字を区別しないファイルシステムでも、ルームごとに分けるため）
 logs/broker.log      ブローカーのログ
 ```
 
@@ -156,7 +167,6 @@ logs/broker.log      ブローカーのログ
 |---|---|---|
 | `port` | 47821 | この PC 用の待ち受け |
 | `ui.lan` / `ui.port` / `ui.allowed_hosts` | true / 47822 / [] | WebUI を LAN に公開するか、そのポート、Host として許可する名前 |
-| `channel_id` | `dev` | チャンネル名（今は1つだけ） |
 | `heartbeat_interval_ms` / `offline_after_ms` | 5000 / 30000 | ハートビートの間隔と、切断と判定するまでの時間 |
 | `notify.debounce_ms` | 2000 | 新着をまとめる待ち時間 |
 | `notify.claude_renotify_backoff_ms` | [300000, 900000, 1800000] | Claude への再通知の間隔 |
@@ -168,4 +178,4 @@ logs/broker.log      ブローカーのログ
 
 ## 9. 試験
 
-`npm test` で、ビルドしてから `test/main.test.mjs` の 13 件を実行します。最後の1件は、`docs/MCP_TOOLS.md` が実際のツールと必須の引数をすべて説明しているかを確かめます。一時フォルダーでブローカーを起動し、HTTP と MCP（stdio）から仕様の規則を確かめます。本物の `codex` の代わりに、受け取った引数を記録するだけの `test/fake-codex.mjs` を使います。
+`npm test` で、ビルドしてから `test/main.test.mjs` の 21 件を実行します。最後の1件は、`docs/MCP_TOOLS.md` が実際のツールと必須の引数をすべて説明しているかを確かめます。一時フォルダーでブローカーを起動し、HTTP と MCP（stdio）から仕様の規則を確かめます。本物の `codex` の代わりに、受け取った引数を記録するだけの `test/fake-codex.mjs` を使います。

@@ -5,6 +5,7 @@
   const SNAP = window.__SM_SNAPSHOT__ || null;
   const app = document.getElementById('app');
   const S = {
+    rooms: [], room: null, roomGone: null,
     members: [], messages: new Map(), order: [], maxSeq: 0, hasOlder: false, oldestSeq: null,
     filter: { kind: 'all', participant: '', q: '' }, selected: null, expanded: new Set(), openDeliv: new Set(),
     lastOk: null, failures: 0, newCount: 0,
@@ -52,8 +53,29 @@
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
     return data;
   }
+  // ---- ルーム（D-018）。選んだルームはこのブラウザーに覚えておく ----
+  const ROOM_KEY = 'session-mail.room';
+  const saved = () => { try { return localStorage.getItem(ROOM_KEY); } catch { return null; } };
+  const save = r => { try { if (r) localStorage.setItem(ROOM_KEY, r); } catch { /* 保存できなくても動く */ } };
+  async function loadRooms() {
+    // 記録（export）にはルームの一覧がある。古い記録は1つのチャンネルだけ
+    S.rooms = SNAP ? (SNAP.rooms || [{ room: SNAP.channel_id || 'dev' }]) : (await api('/api/ui/rooms')).rooms;
+    const names = S.rooms.map(r => r.room);
+    if (S.room && !names.includes(S.room)) { S.roomGone = S.room; S.room = null; }
+    if (!S.room) {
+      const want = saved();
+      S.room = names.includes(want) ? want : names[0] || null;
+      S.filter.participant = ''; S.selected = null;
+    }
+  }
+  function selectRoom(r) {
+    S.room = r; S.roomGone = null; save(r);
+    S.filter.participant = ''; S.selected = null;
+    loadMembers().then(reload).catch(() => {});
+  }
+
   function snapQuery(params) {
-    let list = SNAP.messages;
+    let list = SNAP.messages.filter(m => !m.room || m.room === S.room);
     const f = S.filter;
     if (f.kind !== 'all') list = list.filter(m => m.kind === f.kind);
     if (f.participant) list = list.filter(m => m.sender.id === f.participant || m.deliveries.some(d => d.recipient_id === f.participant));
@@ -67,9 +89,15 @@
     if (S.filter.participant) p.set('participant', S.filter.participant);
     if (S.filter.q) p.set('q', S.filter.q);
     for (const [k, v] of Object.entries(extra)) if (v != null) p.set(k, v);
+    if (!S.room) return Promise.resolve({ messages: [], max_seq: S.maxSeq, has_older: false, oldest_seq: null });
+    p.set('room', S.room);
     return SNAP ? Promise.resolve(snapQuery(extra)) : api('/api/messages?' + p);
   }
-  const loadMembers = async () => { S.members = SNAP ? SNAP.members : (await api('/api/members')).members; };
+  const loadMembers = async () => {
+    if (!S.room) { S.members = []; return; }
+    S.members = SNAP ? (SNAP.participants ? SNAP.participants.filter(m => m.room === S.room) : SNAP.members)
+      : (await api('/api/members?room=' + encodeURIComponent(S.room))).members;
+  };
 
   function merge(list, mode) {
     for (const m of list) {
@@ -103,6 +131,9 @@
   async function poll() {
     try {
       const atBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 40;
+      const before = S.room;
+      await loadRooms();
+      if (S.room !== before) { await loadMembers(); return reload(); }
       await loadMembers();
       const r = await query({ since_seq: S.maxSeq, limit: 200 });
       merge(r.messages, 'poll');
@@ -137,12 +168,16 @@
   function renderTop() {
     const live = SNAP ? null : S.failures >= 2 ? el('span', { class: 'dead' }, '● 切断中') : el('span', { class: 'live' }, '● 接続中');
     const upd = S.lastOk ? (SNAP ? `記録時点 ${new Date(SNAP.exported_at).toLocaleString('ja-JP', { hour12: false })}` : `更新 ${fmtTime(S.lastOk)}`) : '';
+    const roomSel = S.rooms.length ? el('select', { id: 'room', 'aria-label': 'ルームを選ぶ', onchange: e => selectRoom(e.target.value) },
+      ...S.rooms.map(r => el('option', { value: r.room, selected: r.room === S.room }, `ルーム ${r.room}`))) : null;
     refs.top.replaceChildren(
-      el('h1', {}, 'AI通信', el('small', {}, `/ ${SNAP ? SNAP.channel_id : 'dev'} チャンネル${SNAP ? '（記録の表示）' : ''}`)),
-      el('div', { class: 'conn' }, live, upd, SNAP ? null : el('button', { class: 'linkbtn', type: 'button', onclick: logout }, 'ログアウト')),
+      el('h1', {}, 'AI通信', el('small', {}, S.room ? `/ ルーム ${S.room}${SNAP ? '（記録の表示）' : ''}` : '/ ルームがありません')),
+      el('div', { class: 'conn' }, roomSel, live, upd, SNAP ? null : el('button', { class: 'linkbtn', type: 'button', onclick: logout }, 'ログアウト')),
     );
-    refs.banner.hidden = !(S.failures >= 2);
-    refs.banner.textContent = `接続が切れています。表示は最終取得時点のものです（最終更新 ${S.lastOk ? fmtTime(S.lastOk) : 'なし'}）。`;
+    const dead = S.failures >= 2;
+    refs.banner.hidden = !dead && !S.roomGone;
+    refs.banner.textContent = dead ? `接続が切れています。表示は最終取得時点のものです（最終更新 ${S.lastOk ? fmtTime(S.lastOk) : 'なし'}）。`
+      : S.roomGone ? `ルーム ${S.roomGone} は削除されました。${S.room ? `ルーム ${S.room} を表示しています。` : ''}` : '';
   }
 
   function memberCard(m) {
@@ -226,7 +261,8 @@
     const items = S.order.map(id => S.messages.get(id));
     const kids = [];
     if (S.hasOlder) kids.push(el('button', { class: 'linkbtn older', type: 'button', onclick: loadOlder }, '以前の通信を表示'));
-    if (!items.length) kids.push(el('div', { class: 'empty' }, S.filter.q || S.filter.participant || S.filter.kind !== 'all'
+    if (!S.room) kids.push(el('div', { class: 'empty' }, 'ルームがありません。AI にルームの作成を頼んでください（channel_room_create）。'));
+    else if (!items.length) kids.push(el('div', { class: 'empty' }, S.filter.q || S.filter.participant || S.filter.kind !== 'all'
       ? '条件に合う通信はありません。' : 'まだ通信はありません。AIが参加して送信すると、ここに表示されます。'));
     kids.push(...items.map(msgCard));
     refs.list.replaceChildren(...kids);
@@ -265,6 +301,7 @@
   async function start() {
     shell();
     try {
+      await loadRooms();
       await loadMembers();
       await reload();
     } catch (e) {
