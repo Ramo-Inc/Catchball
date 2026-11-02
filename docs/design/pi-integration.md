@@ -1,8 +1,8 @@
 # 仕様：Pi（pi-coding-agent）の参加と自動受信
 
-> **この文書は実装前に書いた仕様書です。** 文中の「今の作り」は、この文書を書いた時点（2026-11-02、`main`）の状態を指します。調査・試作の結果と作り方は [pi-integration-design.md](pi-integration-design.md)（設計書）にあります。
+> **この文書は実装前に書いた仕様書で、記録として残しています。** 今の動きは [ARCHITECTURE](../ARCHITECTURE.md)・[OPERATIONS](../OPERATIONS.md) で確かめてください。 文中の「今の作り」は、この文書を書いた時点（2026-11-02、`main`）の状態を指します。調査・試作の結果と作り方は [pi-integration-design.md](pi-integration-design.md)（設計書）にあります。
 
-- 状態：**未実装**（調査と試作まで済み）
+- 状態：**実装済み**（2026-11-02。D-020。実物の Pi で確認：[verification/pi-20261102.md](../verification/pi-20261102.md)）
 - 対象の Pi：`@earendil-works/pi-coding-agent` 1.5.0（リポジトリは `earendil-works/pi`。旧名 pi-mono）
 - 方針：**Codex・Claude Code とまったく同じ機能・同じ使い方にする。** Codex・Claude にないものは足さない
 

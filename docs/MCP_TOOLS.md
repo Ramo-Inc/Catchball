@@ -47,14 +47,14 @@
 | `display_name` | 表示名（1〜40文字）。同じルームで参加中の人と同じ名前は使えない（英字の大文字・小文字の違いも同じ扱い） |
 | `role` | 担当内容（1〜200文字、改行不可）。「何を担当し、どんな依頼を受けるか」を書く |
 | `agent_id` | **必須**：役割の ID（英小文字・数字・ハイフン。例 `main`、`dev`、`review`、`planning`）。ユーザーに指定されたものを使う。**指定されていなければ、自分で決めずにユーザーに尋ねる**（トークンファイルで起動したセッションでは省略できる） |
-| `conversation_id` | **Codex は必須**（ないと断られる）：シェルで `echo $CODEX_THREAD_ID`（PowerShell は `$env:CODEX_THREAD_ID`）を実行した値。Claude は不要 |
+| `conversation_id` | **Codex は必須**（ないと断られる）：シェルで `echo $CODEX_THREAD_ID`（PowerShell は `$env:CODEX_THREAD_ID`）を実行した値。Claude・Pi は不要 |
 | `coordinator` | 統括（ユーザーと対話し、仕事を振り分ける役）として参加するなら `true` |
 
 - 返り値の `guide` には、役割に応じた運用指示（統括用か担当用）が入っています。**必ず読んで従ってください。**
 - 参加の数秒後に「[session-mail 接続確認]」が届きます。`channel_receive` を1回呼べば十分です。
 - 参加済みの状態でもう一度呼ぶと、自分の表示名と役割だけが更新されます（`coordinator` と `conversation_id` は変わりません）。違う `room` や `agent_id` を指定すると断られます。
 - **別のルームや別の ID に移るとき**は、先に `channel_leave` で退出してから、`channel_join` します。セッションの起動し直しは要りません（トークンファイルで起動したセッションは、ルームと ID を変えられません）。
-- ID は担当を表します。Codex か Claude かは関係ありません。前の担当のセッションがいなければ（切断中・退出済み）、どちらのハーネスからでも同じ ID で参加でき、前の担当宛ての未取得のメッセージをそのまま受け取れます。
+- ID は担当を表します。Codex か Claude かは関係ありません。前の担当のセッションがいなければ（切断中・退出済み）、Codex・Claude・Pi のどれからでも同じ ID で参加でき、前の担当宛ての未取得のメッセージをそのまま受け取れます。
 
 ### channel_members：参加者を見る
 
@@ -151,6 +151,7 @@
 
 - Codex：入力として届く「[session-mail 通知] 未取得 N 件（送信元: …）※ユーザーの発言ではありません」で始まる2行の文
 - Claude：`<channel source="session_mail" kind="mail_notice" …>`
+- Pi：会話に入る「[session-mail 通知] 未取得 N 件（送信元: …）※ユーザーの発言ではありません」で始まる文（Codex と同じ文）。Pi の `/new` などのあとは、参加していない状態に戻るので、ユーザーに頼まれたら同じルーム・同じ ID で参加し直す
 
 **対応のしかた**
 1. `channel_receive` を呼び、`remaining` が 0 になるまで繰り返す（受け取れば既読になる）。

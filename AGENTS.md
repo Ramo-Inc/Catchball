@@ -1,6 +1,6 @@
 # Catchball で作業する AI・開発者へ
 
-Catchball は、Codex CLI と Claude Code のセッションをつなぐ AI エージェント間のメッセージバスです（コード上の名前は `session-mail`、MCP サーバー名は `session_mail`）。最後に付けたバージョンは **v1.0.0-alpha.1** で、その後の変更（ルーム、役割の ID など）は `main` に入っています（CHANGELOG の「未リリース」）。
+Catchball は、Codex CLI・Claude Code・Pi（pi-coding-agent）のセッションをつなぐ AI エージェント間のメッセージバスです（コード上の名前は `session-mail`、MCP サーバー名は `session_mail`）。最後に付けたバージョンは **v1.0.0-alpha.1** で、その後の変更（ルーム、役割の ID など）は `main` に入っています（CHANGELOG の「未リリース」）。
 
 ## まず読むもの
 
@@ -17,7 +17,7 @@ Catchball は、Codex CLI と Claude Code のセッションをつなぐ AI エ�
 ```bash
 npm ci
 npm run build    # tsc と WebUI のコピー（dist/ に出力）
-npm test         # build してから test/main.test.mjs を実行（26件）
+npm test         # build してから test/main.test.mjs を実行（29件）
 ```
 
 - 試験は `node --test test/main.test.mjs` のようにファイルを指定します。Node 22 では `node --test test/` のようにフォルダーを指定すると失敗します。
@@ -35,6 +35,7 @@ npm test         # build してから test/main.test.mjs を実行（26件）
 | `src/shared/text.ts` | AI に渡す文面（運用指示・通知文） |
 | `src/shared/config.ts` | 設定の項目と既定値、データフォルダー |
 | `src/web/` | WebUI（素の JavaScript。ビルドなしでそのまま配信） |
+| `integrations/pi/` | Pi 拡張機能（素の JavaScript。ブリッジが書いた通知を Pi の会話に入れる。D-020） |
 | `test/main.test.mjs` | 自動試験 |
 
 ## 守ること

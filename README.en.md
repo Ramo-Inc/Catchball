@@ -2,7 +2,7 @@
 
 [日本語](README.md) | **English**
 
-**A message bus that connects Codex and Claude Code sessions, so AI agents can talk to each other.**
+**A message bus that connects Codex, Claude Code and Pi sessions, so AI agents can talk to each other.**
 Several AI sessions running on the same PC can send messages to a specific member, or to everyone, inside a **room**. You watch the conversation in a web UI.
 
 ![Web UI: in room review-1, the coordinator (Codex) has asked two reviewers (Claude) for a code review](docs/images/overview.png)
@@ -27,7 +27,7 @@ flowchart LR
     direction LR
     A["Codex session"]
     B["Claude Code session"]
-    C["Codex / Claude …"]
+    C["Pi / Codex / Claude …"]
     BR["Catchball broker<br/>(rooms, inboxes, delivery, notifications)"]
     A <-- "MCP" --> BR
     B <-- "MCP" --> BR
@@ -41,7 +41,7 @@ flowchart LR
 - **How AI sessions use it:** You register `session_mail` in each session as an ordinary **MCP server**. The AI sees eight tools:
   - joining and messaging: `channel_join` / `channel_members` / `channel_send` / `channel_receive` / `channel_leave`
   - rooms: `channel_rooms` / `channel_room_create` / `channel_room_delete`
-- **How sessions are notified:** Codex is notified with `codex queue`, and Claude through the Channels feature. Notifications never include the message body. The notified AI fetches the body itself with `channel_receive`, which also marks the message as read.
+- **How sessions are notified:** Codex is notified with `codex queue`, Claude through the Channels feature, and Pi through the Catchball Pi extension. Notifications never include the message body. The notified AI fetches the body itself with `channel_receive`, which also marks the message as read.
 - **Safety:** The sender is always decided by a token that the broker issues, so an AI cannot pretend to be another member. The AI and admin APIs only listen on this PC (127.0.0.1). The web UI is read-only and requires a login.
 
 ## Examples
@@ -80,7 +80,7 @@ Choose the room to view in the top right corner. Dark mode is supported.
 
 ## Getting started
 
-You need Node.js 22.13 or later, Codex CLI 0.166.0 or later, and Claude Code (signed in with claude.ai or a Console API key).
+You need Node.js 22.13 or later and the AI you use: Codex CLI 0.166.0 or later, Claude Code (signed in with claude.ai or a Console API key), or Pi (pi-coding-agent) 1.5.0 or later.
 
 ### 1. Install and start the broker
 
@@ -125,6 +125,18 @@ Then add these six entries to `permissions.allow` in `~/.claude/settings.json`. 
 "mcp__session_mail__channel_receive", "mcp__session_mail__channel_rooms", "mcp__session_mail__channel_room_create"
 ```
 
+**Pi:** add the following to `~/.pi/agent/mcp.json`, then install the extension for automatic receiving.
+
+```json
+{ "mcpServers": { "session_mail": { "command": "node", "args": ["<Catchball>/dist/bridge/main.js"], "exposure": "direct" } } }
+```
+
+```bash
+pi install <Catchball>/integrations/pi
+```
+
+`exposure: "direct"` shows the tools to the model directly. If you use a Node version manager such as Volta, put the absolute path of the real node binary in `command` (see [OPERATIONS §2](docs/OPERATIONS.md#2-mcp-サーバーとして登録する最初に1回だけ), Japanese).
+
 ### 3. Start the AI sessions in your project folder
 
 ```bash
@@ -138,6 +150,13 @@ claude --dangerously-load-development-channels server:session_mail
 ```
 
 Claude needs this flag to start working on its own when a message arrives. It shows a confirmation screen on every start; choose "I am using this for local development".
+
+```bash
+cd <your project folder>
+pi
+```
+
+With the extension installed, Pi receives automatically without any flag. Switching sessions with `/new` and similar commands drops the membership, so ask Pi to join the same room with the same ID again.
 
 ### 4. Create a room and ask the sessions to join
 
@@ -155,7 +174,7 @@ To appoint a coordinator, ask that session like this:
 
 - The examples are in Japanese because the AI sessions receive Japanese instructions, but you can ask in English too.
 - If you leave out the room or the ID, the AI asks you instead of choosing one itself. If the room does not exist, it asks you instead of creating it.
-- Name IDs after roles (for example `main`, `dev`, `review`). If nobody is using an ID, you can move it between Codex and Claude Code.
+- Name IDs after roles (for example `main`, `dev`, `review`). If nobody is using an ID, you can move it between Codex, Claude Code and Pi.
 - After joining, an automatic check of message delivery runs. Once the web UI shows 「自動受信 確認済み」 (auto-receive verified), the session is ready.
 - How to move between rooms, clean up rooms and swap the session behind a role is explained in [OPERATIONS](docs/OPERATIONS.md) (Japanese). To teach an AI how to use the tools, tell it to read `docs/MCP_TOOLS.md`.
 
@@ -169,15 +188,16 @@ Firewall settings for opening it from another PC, and how to restrict it to this
 
 ## Status
 
-The latest version tag is **v1.0.0-alpha.1** (alpha). Later changes, including rooms, are on `main` (see "未リリース" (unreleased) in the [CHANGELOG](CHANGELOG.md)). It has been tested with real Codex CLI 0.166.0 and Claude Code 2.1.316 on Linux. **It has not been run on Windows yet.**
+The latest version tag is **v1.0.0-alpha.1** (alpha). Later changes, including rooms, are on `main` (see "未リリース" (unreleased) in the [CHANGELOG](CHANGELOG.md)). It has been tested with real Codex CLI 0.166.0, Claude Code 2.1.316 and Pi 1.5.0 on Linux. **It has not been run on Windows yet.**
 
 | Stage | Status |
 |---|---|
 | Proof of concept for message delivery | ✅ Met all pass criteria with real Codex and Claude ([record](docs/verification/poc-20261031.md)) |
-| Implementation | ✅ Broker, MCP bridge and web UI. All 26 automated tests pass |
+| Implementation | ✅ Broker, MCP bridge, web UI and Pi extension. All 29 automated tests pass |
 | Coordinator demo | ✅ A coordinator split work among four workers, finished the task and reported back ([record](docs/verification/demo-20261031.md), recorded before rooms existed) |
 | Rooms and swapping sessions | ✅ Tested with real Codex and Claude: creating, joining, messaging in, moving between and deleting rooms, and swapping a role between Codex and Claude |
 | Review test | ✅ A Codex coordinator and two Claude reviewers shared a code review inside a room and summarized it in a report. The issues they found have been fixed |
+| Pi | ✅ Tested with real Pi (Haiku): joining, the auto-receive check, receiving and replying on its own, deferring messages that arrive while it is busy, renotifying after an interruption, and rejoining after `/new` ([record](docs/verification/pi-20261102.md)) |
 | Next | ⏳ Testing on Windows, a goal test with the user's own five sessions, detecting sessions that are waiting for approval ([ROADMAP](docs/ROADMAP.md)) |
 
 The status of each requirement is in [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).

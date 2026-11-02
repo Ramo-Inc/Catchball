@@ -64,6 +64,33 @@ claude mcp add --scope user session_mail -- node <Catchball>/dist/bridge/main.js
 
 - プロジェクトの `.mcp.json` に登録する方法もあります。その場合は、最初の起動時に「新しい MCP サーバー」の確認画面が出るので、使う方を選んでください。
 
+### Pi（pi-coding-agent）
+
+`~/.pi/agent/mcp.json` に次を書きます（すでにほかのサーバーがあれば、`mcpServers` の中に足します）。
+
+```json
+{
+  "mcpServers": {
+    "session_mail": {
+      "command": "node",
+      "args": ["<Catchball>/dist/bridge/main.js"],
+      "exposure": "direct"
+    }
+  }
+}
+```
+
+続けて、自動受信のための拡張機能を入れます（Claude の起動時の引数に当たるものです）。
+
+```bash
+pi install <Catchball>/integrations/pi
+```
+
+- `exposure: "direct"` を入れないと、ツールがモデルに直接見えません（Pi の既定は `codemode`）。
+- `command` は `node` にします。拡張機能とブリッジは、Pi のプロセス番号で受け口の場所を決めるので、`npx` などを挟むと受け口が見つかりません。Node のバージョン管理の道具（Volta など）の中継が挟まる場合は、`command` に node の実体の絶対パス（`node -p process.execPath` で分かる）を書きます。
+- Pi は、ツールを呼ぶたびの承認を求めません。退出や削除の前の確認も出ません。
+- ブローカーの中では、Pi は Claude と同じ種類として扱われます。WebUI と `status` の種類も「Claude」と出ます。
+
 ## 3. 起動する
 
 プロジェクトのフォルダーで起動します。そのフォルダーの `AGENTS.md`（Codex）と `CLAUDE.md`（Claude）が自動で読み込まれます。
@@ -81,6 +108,14 @@ claude --dangerously-load-development-channels server:session_mail
 - Claude の引数は、メッセージが届いたときに自動で動き出す（Channel）ために必要です。起動のたびに確認画面が出るので「I am using this for local development」を選びます。初めてのフォルダーでは、その前に「このフォルダーを信頼するか」の確認も出ます。
 - 引数なしで起動しても、ツールは使えます。ただし、メッセージが届いても自動では動き出しません。
 - Codex の担当を、sandbox なし・承認なしで起動しないでください。通常の設定（`workspace-write`・`on-request`）で十分に動きます。
+
+```bash
+cd <プロジェクトのフォルダー>
+pi
+```
+
+- Pi は、§2 の拡張機能を入れていれば、引数なしで自動受信します。
+- Pi の `/new`・`/resume`・fork・`/reload` では、Pi がブリッジを起動し直すので、ルームに参加していない状態に戻ります（ブローカーでは切断中）。未取得のメッセージは残ります。同じルーム・同じ ID で参加し直すよう頼めば、通知が再開します。Claude の `/clear` とは違うので注意してください。
 
 ## 4. ルームと参加
 
@@ -116,12 +151,12 @@ claude --dangerously-load-development-channels server:session_mail
 - ID はルームごとです。ルーム proj-a の `dev` と、ルーム proj-b の `dev` は別の参加者です。
 - 宛先は ID で指定するので、担当の中身（Codex か Claude か）が替わっても、送る側は同じ ID に送り続けられます。
 
-### 4.4 担当を入れ替える（Codex ⇔ Claude Code）
+### 4.4 担当を入れ替える（Codex ⇔ Claude Code ⇔ Pi）
 
 1. 引き継ぎが必要なら、前のセッションに状況（やったこと・残り・変えたファイル）をまとめさせます。引き継ぎはセッションどうしで行います。入れ替わったことは、ほかの参加者へ自動では知らせません。
 2. 前のセッションを閉じます。退出（leave）はさせません。退出すると、前の担当宛ての未取得のメッセージが配送停止になるためです。
 3. 前のセッションが「切断中」になってから、新しいセッションに「キャッチボールのルーム proj-a に、ID は dev で参加して」と頼みます。前の担当宛ての未取得のメッセージは、新しいセッションがそのまま受け取ります。
-   - Claude は、閉じればすぐ切断中になります。
+   - Claude と Pi は、閉じればすぐ切断中になります。
    - Codex は、閉じても（`/new` で新しい会話にしても）前の会話が1〜2分「接続中」のまま残ります（§7-2）。
 4. 前のセッションがまだ動いていた場合、そのセッションは次にツールを使ったときに「参加は無効になった」と伝えられます。続けるなら、別の ID などで参加し直させます（起動し直す必要はありません）。
 
@@ -201,6 +236,7 @@ node dist/cli/admin.js provision --room proj-a --agent dev --provider claude --c
 | 「config.json の … が正しくありません」で止まる | 書かれている項目の値を直します（数の項目は数で、配列の項目は1つ以上の値を並べて書きます） |
 | 「自動受信 失敗（要確認）」 | `status` の通知エラーを見ます。`codex` が見つからない場合は、`config.json` の `codex.command` に codex の実体のフルパスを書きます（Windows の npm 版は `.cmd` を直接起動できません）。失敗した通知は、30秒・2分・10分の間隔で送り直します |
 | Codex がメッセージに反応しない | Esc で作業を中断した直後の Codex は、届いた通知を自動では処理しません。何か入力すると、そのターンの後で処理されます |
+| Pi がメッセージに反応しない | `pi list` などで拡張機能（`integrations/pi`）が入っているかを確認します。`status` の通知エラーに「Pi の拡張機能の受け口に書けません」と出ていれば、拡張機能が入っていないか、mcp.json の `command` が node の実体でありません（§2）。`/new` などのあとなら、参加し直させます（§3） |
 | Claude がメッセージに反応しない | `--dangerously-load-development-channels server:session_mail` を付けて起動したか、起動時に Channel の行が表示されたかを確認します。組織のアカウントで「blocked by org policy」と出る場合は、管理者に Channels の有効化を頼んでください |
 | 承認を求める画面が毎回出る | §2 のツールの承認設定（Codex の `default_tools_approval_mode`、Claude の `permissions.allow`）を確認します |
 | 別の PC から WebUI が開けない | ファイアウォール、`ui.lan`、開いている名前（IP アドレスか PC 名。それ以外は `ui.allowed_hosts` に追加）を確認します |

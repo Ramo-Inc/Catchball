@@ -1,6 +1,6 @@
 # Catchball ドキュメント
 
-Catchball は、Codex CLI と Claude Code のセッションを、ルームごとにつなぐ AI エージェント間のメッセージバスです。最後に付けたバージョンは **v1.0.0-alpha.1**（2026-10-31）で、その後の変更（ルーム、役割の ID、担当の入れ替えなど）は `main` に入っています（[CHANGELOG](../CHANGELOG.md) の「未リリース」）。この `docs/` の現行の文書は、`main` の今のコードに合わせてあります。
+Catchball は、Codex CLI・Claude Code・Pi（pi-coding-agent）のセッションを、ルームごとにつなぐ AI エージェント間のメッセージバスです。最後に付けたバージョンは **v1.0.0-alpha.1**（2026-10-31）で、その後の変更（ルーム、役割の ID、担当の入れ替えなど）は `main` に入っています（[CHANGELOG](../CHANGELOG.md) の「未リリース」）。この `docs/` の現行の文書は、`main` の今のコードに合わせてあります。
 
 ## 新しく作業を始める人・AI セッションへ
 
@@ -37,8 +37,8 @@ Catchball は、Codex CLI と Claude Code のセッションを、ルームご�
 | [REQUIREMENTS.md](REQUIREMENTS.md) | 現行 | 要件の達成状況・仕様書からの変更点 |
 | [DECISIONS.md](DECISIONS.md) | 現行 | 設計判断の記録 |
 | [ROADMAP.md](ROADMAP.md) | 現行 | 今後の作業・既知の問題 |
-| [design/](design/) | 記録 | 機能ごとの「ユーザーとの決定事項」と「実装前に書いた仕様書」。Pi の参加の仕様書・設計書だけは**未実装**で、それ以外は**実装済み**。決定事項は今も有効だが、仕様書の「今の作りは〜」は実装前の状態を指す。今の動きは上の現行の文書で確かめる |
-| [verification/](verification/) | 記録 | PoC とデモの検証記録・証跡。**記録した時点の版**（ルームも役割の ID もなく、ACK の操作があったころ）のもので、今の手順ではない |
+| [design/](design/) | 記録 | 機能ごとの「ユーザーとの決定事項」と「実装前に書いた仕様書」。どれも**実装済み**。決定事項は今も有効だが、仕様書の「今の作りは〜」は実装前の状態を指す。今の動きは上の現行の文書で確かめる |
+| [verification/](verification/) | 記録 | 検証記録・証跡。どれも**記録した時点の版**のもので、今の手順ではない。PoC とデモの記録は、ルームも役割の ID もなく、ACK の操作があったころのもの。Pi の記録（pi-20261102.md）は、Pi の参加を実装した直後のもの |
 | [spec/](spec/) | 入力 | ユーザーが作成した元の仕様書（MVP 1.4）。**書き換えない** |
 | [archive/](archive/) | 履歴 | 初期の設計書・実装計画・運用手順・レビュー・PoC の手順書。**今の実装とは大きく異なる**ので、経緯の確認にだけ使う。作業の根拠にしない |
 | [images/](images/) | 画像 | README で使う WebUI のスクリーンショット（今の画面） |
@@ -49,7 +49,7 @@ Catchball は、Codex CLI と Claude Code のセッションを、ルームご�
 |---|---|---|
 | 役割の ID と担当の入れ替え（D-017） | [role-id-takeover-decisions.md](design/role-id-takeover-decisions.md) | [role-id-takeover.md](design/role-id-takeover.md) |
 | ルーム（D-018） | [rooms-decisions.md](design/rooms-decisions.md) | [rooms.md](design/rooms.md) |
-| Pi の参加と自動受信（**未実装**） | 仕様書の中に含める | [pi-integration.md](design/pi-integration.md)（機能の仕様）・[pi-integration-design.md](design/pi-integration-design.md)（設計・調査・試作の結果） |
+| Pi の参加と自動受信（D-020） | 仕様書の中に含める | [pi-integration.md](design/pi-integration.md)（機能の仕様）・[pi-integration-design.md](design/pi-integration-design.md)（設計・調査・試作の結果） |
 
 リポジトリ直下の README には、英語版（[README.en.md](../README.en.md)）もあります。内容を変えたら、両方を直してください。
 
