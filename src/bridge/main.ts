@@ -50,22 +50,32 @@ async function tool(method: 'GET' | 'POST', path: string, body?: unknown, retry 
   return result(r.data, !r.ok);
 }
 
+// トークンファイルで起動したブリッジは ID が決まっている。会話の中から参加する方法では、ID の指定が必須
+const tokenFileMode = bound !== null;
+const agentIdArg = z.string().describe('役割の ID（例 dev, planning）。ユーザーに指定されたものを使う。分からなければユーザーに尋ねる');
+
 server.registerTool('channel_join', {
   description: [
     '表示名と担当内容（role）を登録して、チャンネル（キャッチボール）に参加する。参加済みなら自分のプロフィールだけを更新する。',
-    'agent_id は英小文字・数字・ハイフンの固定 ID（例 codex-main, claude-1）。ユーザーに指定されたものを使い、なければ省略する（自動で割り当てる）。',
+    'agent_id は英小文字・数字・ハイフンの役割の ID（例 dev, planning, review）。ユーザーに指定されたものを使う。指定がなければ、自分で決めずにユーザーに尋ねる。',
     'Codex の場合は conversation_id に自分の会話 ID を必ず入れる：シェルで echo $CODEX_THREAD_ID（PowerShell は $env:CODEX_THREAD_ID）を実行して得た値。',
     '統括（ユーザーと対話し、仕事を振り分ける役）として参加するときは coordinator=true。応答の guide に運用指示がある。',
   ].join(' '),
   inputSchema: {
     display_name: z.string().describe('表示名（1〜40文字）'),
     role: z.string().describe('担当内容。何を担当し、どんな依頼を受ける相手か（1〜200文字）'),
-    agent_id: z.string().optional().describe('固定 ID（例 claude-1）。省略すると自動で割り当てる'),
+    agent_id: tokenFileMode ? agentIdArg.optional() : agentIdArg,
     conversation_id: z.string().optional().describe('Codex のみ必須：$CODEX_THREAD_ID の値'),
     coordinator: z.boolean().optional().describe('統括として参加するなら true'),
   },
 }, async a => {
-  if (bound) return tool('POST', '/api/agent/join', { display_name: a.display_name, role: a.role });
+  if (bound) {
+    if (a.agent_id && a.agent_id !== bound.agent_id) {
+      return result({ error: { code: 'INVALID_ARGUMENT', message: `このセッションは ${bound.agent_id} として参加済みです。`,
+        hint: 'ID を変えるには、セッションを起動し直してください。' } }, true);
+    }
+    return tool('POST', '/api/agent/join', { display_name: a.display_name, role: a.role });
+  }
   const keyPath = join(dataDir(), 'tokens', 'join.key');
   if (!existsSync(keyPath)) {
     return result({ error: { code: 'BROKER_NOT_READY', message: 'キャッチボールのブローカーがこの PC で起動していません。', hint: 'ユーザーに session-mail-admin serve の起動を頼んでください。' } }, true);
@@ -110,12 +120,17 @@ server.registerTool('channel_leave', {
 // ---- ハートビート ------------------------------------------------------------
 let generation = 0;
 let results: { notify_id: string; result: 'written' | 'error'; error?: string }[] = [];
-let beating = false;
+let beating: Promise<void> | null = null;
 let stopped = false;
 
-async function beat(): Promise<void> {
-  if (!bound || beating) return;
-  beating = true;
+function beat(): Promise<void> {
+  if (!bound || beating) return beating ?? Promise.resolve();
+  beating = beatOnce().finally(() => { beating = null; });
+  return beating;
+}
+
+async function beatOnce(): Promise<void> {
+  if (!bound) return;
   try {
     if (generation === 0) {
       const r = await call(bound, 'POST', '/api/agent/connect', { bridge_version: VERSION, pid: process.pid, provider: bound.provider });
@@ -140,14 +155,16 @@ async function beat(): Promise<void> {
         results.push({ notify_id: n.notify_id, result: 'error', error: (e as Error).message });
       }
     }
-  } finally {
-    beating = false;
+  } catch (e) {
+    logErr(`heartbeat 失敗: ${(e as Error).message}`);
   }
 }
 
 async function shutdown(): Promise<void> {
   if (stopped) return;
   stopped = true;
+  // 接続の途中で終了するときは、接続が終わるのを待ってから切断を伝える（待つのは最大1秒）
+  if (beating) await Promise.race([beating, new Promise(r => setTimeout(r, 1000))]);
   if (bound && generation > 0) {
     await Promise.race([call(bound, 'POST', '/api/agent/disconnect', { generation }), new Promise(r => setTimeout(r, 1000))]);
   }

@@ -267,17 +267,99 @@ test('会話の中から参加：トークンファイルなしで起動し、ch
   const other = await startUnbound('codex');
   const dup = JSON.parse((await other.callTool({ name: 'channel_join', arguments: { display_name: '別人', role: 'x', agent_id: 'codex-x', conversation_id: 'T-Y' } })).content[0].text);
   assert.equal(dup.error.code, 'AGENT_IN_USE');
+  assert.match(dup.error.hint, /別の ID は使わず/, '別の ID に逃げさせず、ユーザーに確認させる');
 
-  // Claude は会話 ID なしで参加でき、ID を省略すると自動で割り当てる
+  // ID は必須：ツールの定義で必須になっていて、省略すると断られる
   const events = [];
   const cl = await startUnbound('claude', p => events.push(p));
-  const cj = JSON.parse((await cl.callTool({ name: 'channel_join', arguments: { display_name: 'レビュー担当2', role: 'レビュー' } })).content[0].text);
-  assert.match(cj.agent_id, /^claude-\d+$/);
+  const joinTool = (await cl.listTools()).tools.find(t => t.name === 'channel_join');
+  assert.ok(joinTool.inputSchema.required.includes('agent_id'), '会話の中から参加する方法では agent_id が必須');
+  assert.ok((await cl.callTool({ name: 'channel_join', arguments: { display_name: 'レビュー担当2', role: 'レビュー' } })).isError, 'ID を省略すると断られる');
+  const key = readFileSync(join(HOME, 'tokens', 'join.key'), 'utf8').trim();
+  const noId = await req('POST', '/api/join/self', { token: key, body: { provider: 'claude', display_name: 'x', role: 'y' } });
+  assert.equal(noId.data.error.code, 'INVALID_ARGUMENT');
+  assert.match(noId.data.error.hint, /ユーザーに尋ね/, 'ID は自分で決めず、ユーザーに尋ねるよう案内する');
+  const noConv = await req('POST', '/api/join/self', { token: key, body: { provider: 'codex', agent_id: 'codex-noconv', display_name: 'x', role: 'y' } });
+  assert.equal(noConv.data.error.code, 'INVALID_ARGUMENT', 'Codex は会話 ID なしでは参加できない');
+  assert.match(noConv.data.error.hint, /CODEX_THREAD_ID/);
+
+  // Claude は会話 ID なしで参加できる
+  const cj = JSON.parse((await cl.callTool({ name: 'channel_join', arguments: { display_name: 'レビュー担当2', role: 'レビュー', agent_id: 'review2' } })).content[0].text);
+  assert.equal(cj.agent_id, 'review2');
   await until(() => events.find(e => e.meta.kind === 'probe'), 20000, 'Claude への probe');
 
   // 参加用キーが違えば参加できない
   const bad = await req('POST', '/api/join/self', { token: 'wrong-key', body: { provider: 'codex', display_name: 'x', role: 'y' } });
   assert.equal(bad.status, 401);
+});
+
+// 会話の中から参加する方法のブリッジ（トークンファイルなし）を起動する
+async function startBridge(provider, onChannel) {
+  const e = { ...env, SESSION_MAIL_PROVIDER: provider };
+  delete e.SESSION_MAIL_TOKEN_FILE;
+  const t = new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'dist/bridge/main.js')], env: e, stderr: 'pipe' });
+  const c = new Client({ name: provider === 'claude' ? 'claude-code' : 'codex-mcp-client', version: '0' });
+  c.fallbackNotificationHandler = async n => { if (n.method === 'notifications/claude/channel') onChannel?.(n.params); };
+  await c.connect(t); clients.push(c);
+  const call = async (name, args = {}) => { const r = await c.callTool({ name, arguments: args }); return { isError: !!r.isError, data: (() => { try { return JSON.parse(r.content[0].text); } catch { return r.content[0].text; } })() }; };
+  return { c, call };
+}
+const memberOf = async id => (await A('main', 'members')).data.members.find(m => m.id === id);
+
+test('担当の入れ替え：同じ役割の ID に、別のハーネスで入れる（未取得は引き継ぐ）', async () => {
+  // Codex（会話 T-DEV1）で dev として参加し、閉じる
+  const cx = await startBridge('codex');
+  assert.equal((await cx.call('channel_join', { agent_id: 'dev', display_name: '開発担当', role: '開発', conversation_id: 'T-DEV1' })).data.agent_id, 'dev');
+  await cx.c.close();
+  await until(async () => (await memberOf('dev'))?.connection === 'offline', 8000, 'dev が切断中になる');
+
+  // 切断中の dev にも送れる
+  const sent = await A('main', 'send', { to: 'dev', body: '[依頼 T-10] 引き継ぎの確認', client_message_id: 'main-T10-req' });
+  assert.equal(sent.status, 200);
+  assert.equal(sent.data.recipients[0].delivery, 'queued');
+
+  // Claude で同じ dev に入れる。未取得を受け取れ、ハーネスは Claude になり、自動受信の確認が届く
+  const events = [];
+  const cl = await startBridge('claude', p => events.push(p));
+  const j = await cl.call('channel_join', { agent_id: 'dev', display_name: '開発担当', role: '開発' });
+  assert.equal(j.isError, false, JSON.stringify(j.data));
+  const got = (await cl.call('channel_receive')).data;
+  assert.ok(got.messages.some(m => m.message_id === sent.data.message_id), '前の担当宛ての未取得を受け取れる');
+  assert.equal((await memberOf('dev')).provider, 'claude');
+  await until(() => events.find(e => e.meta.kind === 'probe'), 20000, 'Claude への自動受信の確認');
+
+  // 参加済みのセッションで別の ID を指定すると断られる。同じ ID なら更新できる
+  const other = await cl.call('channel_join', { agent_id: 'review', display_name: '開発担当', role: '開発' });
+  assert.equal(other.isError, true);
+  assert.match(other.data.error.message, /dev として参加済み/);
+  assert.equal((await cl.call('channel_join', { agent_id: 'dev', display_name: '開発担当', role: '開発とテスト' })).data.self.role, '開発とテスト');
+
+  // Claude を閉じて、Codex（新しい会話 T-DEV2）で入れる。通知は T-DEV2 にだけ届き、前の会話 T-DEV1 には届かない
+  await cl.c.close();
+  await until(async () => (await memberOf('dev'))?.connection === 'offline', 8000, 'dev が切断中になる（2回目）');
+  const before = queueCalls().length;
+  const cx2 = await startBridge('codex');
+  assert.equal((await cx2.call('channel_join', { agent_id: 'dev', display_name: '開発担当', role: '開発', conversation_id: 'T-DEV2' })).isError, false);
+  await until(() => queueCalls().slice(before).find(c => c[2] === 'T-DEV2'), 20000, 'T-DEV2 への通知');
+  assert.equal(queueCalls().slice(before).filter(c => c[2] === 'T-DEV1').length, 0, '前の会話には通知しない');
+  assert.equal((await memberOf('dev')).provider, 'codex');
+});
+
+test('担当の入れ替え：前のキーは無効になる・表示名で断られても ID は使用中にならない', async () => {
+  const key = readFileSync(join(HOME, 'tokens', 'join.key'), 'utf8').trim();
+  const self = body => req('POST', '/api/join/self', { token: key, body });
+
+  // トークンファイルの参加者（Codex）を、会話の中からの参加（Claude）で入れ替えると、前のトークンは使えない
+  admin('provision', '--agent', 'old1', '--provider', 'codex', '--conversation', 'T-OLD1');
+  assert.equal((await A('old1', 'members')).status, 200);
+  assert.equal((await self({ provider: 'claude', agent_id: 'old1', display_name: '入れ替え後', role: 'x' })).status, 200);
+  assert.equal((await A('old1', 'members')).status, 401, '入れ替え前のトークンは失効している');
+
+  // 表示名の重複で断られても、その ID は使用中にならず、すぐに別の表示名で入れる
+  const taken = await self({ provider: 'claude', agent_id: 'nm1', display_name: '統括', role: 'x' });
+  assert.equal(taken.data.error.code, 'NAME_TAKEN');
+  const ok = await self({ provider: 'claude', agent_id: 'nm1', display_name: '別の名前', role: 'x' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.data));
 });
 
 test('ドキュメント：docs/MCP_TOOLS.md が実際のツールと必須の引数をすべて説明している', async () => {

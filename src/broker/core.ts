@@ -88,40 +88,50 @@ export class Core {
 
   // 会話の中から「参加して」と頼まれたときの参加（トークンファイルなしで起動したブリッジ用）。
   // 参加用のキーはブリッジがこの PC のデータフォルダーから読む。同じ固定 ID が接続中なら断る。
+  // 会話の中からの参加（D-012・D-017）。ID はユーザーが決める役割の ID。ハーネスが違っても、使用中でなければ入れる。
+  // 検査・登録・前のキーの失効・新しいキーの発行・使用中の記録を1つのトランザクションで行い、断るときは何も残さない。
   selfJoin(o: { provider: unknown; agent_id?: unknown; display_name: unknown; role: unknown; conversation_id?: unknown; coordinator?: unknown }) {
     const provider = o.provider === 'claude' ? 'claude' : o.provider === 'codex' ? 'codex' : null;
     if (!provider) throw new ApiError('INVALID_ARGUMENT', 400, 'provider は codex か claude です。');
+    if (o.agent_id == null || o.agent_id === '') {
+      throw new ApiError('INVALID_ARGUMENT', 400, '参加する ID（agent_id）が指定されていません。',
+        'ID は自分で決めず、どの ID で参加するかユーザーに尋ねてから、もう一度 channel_join してください。');
+    }
+    const agentId = checkAgentId(o.agent_id);
     normalizeName(o.display_name);
     normalizeRole(o.role);
     const conv = typeof o.conversation_id === 'string' ? o.conversation_id.trim() : '';
-    let agentId: string;
-    if (o.agent_id != null && o.agent_id !== '') agentId = checkAgentId(o.agent_id);
-    else {
-      let n = 1;
-      while (this.participant(`${provider}-${n}`)) n++;
-      agentId = `${provider}-${n}`;
+    if (provider === 'codex' && !conv) {
+      throw new ApiError('INVALID_ARGUMENT', 400, 'Codex は会話 ID（conversation_id）が必要です。',
+        'シェルで echo $CODEX_THREAD_ID（PowerShell は $env:CODEX_THREAD_ID）を実行し、その値を conversation_id に入れて、もう一度 channel_join してください。');
     }
-    const token = this.db.tx(() => {
+    const receiverKind = provider === 'codex' ? 'codex_queue' : 'claude_channel';
+    const r = this.db.tx(() => {
       const p = this.participant(agentId);
       if (p) {
-        if (p.provider !== provider) throw new ApiError('INVALID_ARGUMENT', 400, `${agentId} は ${p.provider} 用の ID です。別の ID を指定してください。`);
-        if (this.isOnline(p)) throw new ApiError('AGENT_IN_USE', 409, `${agentId} は別のセッションが接続中です。`, '別の固定 ID（agent_id）を指定してください。');
-        if (conv) this.db.run('UPDATE participants SET conversation_id = ? WHERE agent_id = ?', conv, agentId);
-        if (o.coordinator === true) this.db.run("UPDATE participants SET duty = 'coordinator' WHERE agent_id = ?", agentId);
+        if (this.isOnline(p)) {
+          throw new ApiError('AGENT_IN_USE', 409, `${agentId} は別のセッションが接続中です。`,
+            '前のセッションがまだ接続中です。別の ID は使わず、ユーザーに伝えて、前のセッションが終了したか確認してもらってください。');
+        }
+        // 会話 ID は、この参加で指定されたものだけを使う（前の値を残すと、通知が前の会話に届く）
+        this.db.run(`UPDATE participants SET provider = ?, receiver_kind = ?, conversation_id = ?,
+          duty = CASE WHEN ? THEN 'coordinator' ELSE duty END WHERE agent_id = ?`,
+          provider, receiverKind, provider === 'codex' ? conv : '', o.coordinator === true ? 1 : 0, agentId);
         this.revokeCredentials('agent', agentId, 'self_join');
       } else {
         this.db.run('INSERT INTO participants (agent_id, channel_id, provider, duty, conversation_id, receiver_kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          agentId, this.cfg.channel_id, provider, o.coordinator === true ? 'coordinator' : 'worker', conv, provider === 'codex' ? 'codex_queue' : 'claude_channel', this.now());
+          agentId, this.cfg.channel_id, provider, o.coordinator === true ? 'coordinator' : 'worker', provider === 'codex' ? conv : '', receiverKind, this.now());
         this.db.run('INSERT INTO notify_state (agent_id) VALUES (?)', agentId);
       }
-      // Codex は会話 ID がないと通知（codex queue）を届けられない
-      const missing = provider === 'codex' && !(conv || this.participant(agentId)!.conversation_id);
-      this.db.run('UPDATE participants SET receiver_state = ?, receiver_detail = ? WHERE agent_id = ?',
-        missing ? 'not_configured' : 'unverified', missing ? '会話 ID が未登録です（channel_join の conversation_id に $CODEX_THREAD_ID を指定）' : null, agentId);
-      return this.createCredential('agent', agentId);
+      this.db.run("UPDATE participants SET receiver_state = 'unverified', receiver_detail = NULL WHERE agent_id = ?", agentId);
+      const token = this.createCredential('agent', agentId);
+      const joined = this.joinProfile(this.participant(agentId)!, o.display_name, o.role);
+      // 参加した時点から使用中にする（ブリッジが接続するまでの間に、同じ ID で参加されないように）
+      this.db.run("UPDATE participants SET conn_state = 'online', last_seen_at = ? WHERE agent_id = ?", this.now(), agentId);
+      return { token, agent_id: agentId, provider, duty: this.participant(agentId)!.duty as Duty, ...joined };
     });
-    const agent = this.participant(agentId)!;
-    return { token, agent_id: agentId, provider, duty: agent.duty, ...this.join(agent, o.display_name, o.role) };
+    this.lastSeen.set(agentId, this.now());
+    return r;
   }
 
   participant(id: string): Row | undefined {
@@ -166,14 +176,17 @@ export class Core {
   }
 
   join(agent: Row, rawName: unknown, rawRole: unknown) {
+    return this.db.tx(() => this.joinProfile(agent, rawName, rawRole));
+  }
+
+  // 表示名と役割を登録して参加中にする。トランザクションは呼び出し側が持つ（db.tx は入れ子にできない）
+  private joinProfile(agent: Row, rawName: unknown, rawRole: unknown) {
     const { name, key } = normalizeName(rawName);
     const role = normalizeRole(rawRole);
     try {
-      this.db.tx(() => {
-        this.db.run(`UPDATE participants SET display_name = ?, display_name_key = ?, role = ?, profile_updated_at = ?,
-          joined_at = CASE WHEN membership <> 'joined' THEN ? ELSE joined_at END, left_at = NULL, membership = 'joined' WHERE agent_id = ?`,
-          name, key, role, this.now(), this.now(), agent.agent_id);
-      });
+      this.db.run(`UPDATE participants SET display_name = ?, display_name_key = ?, role = ?, profile_updated_at = ?,
+        joined_at = CASE WHEN membership <> 'joined' THEN ? ELSE joined_at END, left_at = NULL, membership = 'joined' WHERE agent_id = ?`,
+        name, key, role, this.now(), this.now(), agent.agent_id);
     } catch (e) {
       if (String((e as Error).message).includes('UNIQUE')) {
         throw new ApiError('NAME_TAKEN', 409, `表示名「${name}」は他の参加者が使っています。以前の登録はそのまま残っています。`, '別の表示名で channel_join し直してください。');
