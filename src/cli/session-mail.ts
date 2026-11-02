@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// AI・人向けの最小 CLI（DESIGN §6.4）。MCP と同じ API を呼ぶ。公開するのは6操作だけ
+// AI・人向けの最小 CLI（DESIGN §6.4）。MCP と同じ API を呼ぶ。公開するのは5操作だけ
 import { readFileSync } from 'node:fs';
 import { readTokenFile } from '../shared/config.js';
 import { call } from '../shared/client.js';
@@ -9,7 +9,6 @@ const USAGE = `使い方（トークンは --token-file か SESSION_MAIL_TOKEN_F
   session-mail members
   session-mail send --to <固定ID|all> --id <client_message_id> (--body <本文> | --body-file <パス|->) [--reply-to <message_id>]
   session-mail receive [--limit 10]
-  session-mail ack <message_id> [...]
   session-mail leave --confirm`;
 
 function parse(argv: string[]) {
@@ -37,7 +36,6 @@ async function main(): Promise<number> {
       break;
     }
     case 'receive': r = await call(tf, 'POST', '/api/agent/receive', { limit: o.limit ? Number(o.limit) : undefined }); break;
-    case 'ack': r = await call(tf, 'POST', '/api/agent/ack', { message_ids: rest }); break;
     case 'leave':
       if (o.confirm !== 'true') { console.error('退出するには --confirm を付けてください。'); return 2; }
       r = await call(tf, 'POST', '/api/agent/leave', { confirm: true }); break;

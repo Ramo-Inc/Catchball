@@ -40,11 +40,11 @@ approval_mode = "prompt"
 claude mcp add --scope user session_mail -- node <Catchball>/dist/bridge/main.js
 ```
 
-`~/.claude/settings.json` の `permissions.allow` に次の5つを加えます。`channel_leave` は加えず、退出だけは確認が出るようにします。
+`~/.claude/settings.json` の `permissions.allow` に次の4つを加えます。`channel_leave` は加えず、退出だけは確認が出るようにします。
 
 ```json
 "mcp__session_mail__channel_join", "mcp__session_mail__channel_members", "mcp__session_mail__channel_send",
-"mcp__session_mail__channel_receive", "mcp__session_mail__channel_ack"
+"mcp__session_mail__channel_receive"
 ```
 
 - プロジェクトの `.mcp.json` に登録する方法もあります。その場合は、最初の起動時に「新しい MCP サーバー」の確認画面が出るので、使う方を選んでください。
@@ -110,7 +110,7 @@ node dist/cli/admin.js provision --agent claude-1 --provider claude --conversati
 | `node dist/cli/admin.js status` | 参加者ごとの参加・接続・自動受信・未取得件数・通知のエラー |
 | `node dist/cli/admin.js probe <ID> [--wait 120]` | 自動受信を確認する（通知を出し、受信されるまで待つ） |
 | `node dist/cli/admin.js export [--from ISO] [--to ISO] --out file.json` | やり取りを JSON で書き出す（証跡用） |
-| `node dist/cli/session-mail.js <join|members|send|receive|ack|leave>` | AI と同じ6操作をコマンドで実行する（`SESSION_MAIL_TOKEN_FILE` が必要） |
+| `node dist/cli/session-mail.js <join|members|send|receive|leave>` | AI と同じ5操作をコマンドで実行する（`SESSION_MAIL_TOKEN_FILE` が必要） |
 
 ## 7. うまくいかないとき
 
@@ -137,6 +137,6 @@ AI に渡す文面は `src/shared/text.ts` にあり、ここが正です。
 |---|---|
 | 共通の運用指示（`COMMON_GUIDE`） | MCP の instructions |
 | 統括用・担当用の指示（`COORDINATOR_GUIDE` / `WORKER_GUIDE`） | `channel_join` の応答の `guide` |
-| 通知文（`noticeText`） | 受信・ACK・返信の最小限の手順を含めて送る |
+| 通知文（`noticeText`） | 受信・返信の最小限の手順を含めて送る |
 
 文面を変えたら、実際の Codex と Claude で動きを確かめてください。Codex は、MCP の instructions よりも通知文に従う傾向があります。

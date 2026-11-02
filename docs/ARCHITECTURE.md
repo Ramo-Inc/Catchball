@@ -15,8 +15,8 @@
 | 部品 | 場所 | 役割 |
 |---|---|---|
 | ブローカー | `src/broker/`（起動は `session-mail-admin serve`） | 認証、メッセージの保存と配送、接続状態、通知、HTTP API、WebUI の配信。DB を開くのはこのプロセスだけ |
-| ブリッジ | `src/bridge/main.ts` | 各 AI セッションが stdio で起動する MCP サーバー。6つのツールを提供し、5秒ごとにハートビートを送る。Claude には Channel 通知を送る |
-| AI 用 CLI | `src/cli/session-mail.ts` | ブリッジと同じ6操作を、コマンドで実行する（人の確認作業やデバッグ用） |
+| ブリッジ | `src/bridge/main.ts` | 各 AI セッションが stdio で起動する MCP サーバー。5つのツールを提供し、5秒ごとにハートビートを送る。Claude には Channel 通知を送る |
+| AI 用 CLI | `src/cli/session-mail.ts` | ブリッジと同じ5操作を、コマンドで実行する（人の確認作業やデバッグ用） |
 | 管理用 CLI | `src/cli/admin.ts` | serve / provision / viewer-token / status / probe / export。AI のツールには出さない |
 | WebUI | `src/web/` | 閲覧専用の画面。本文は `textContent` だけで表示する |
 | 共通 | `src/shared/` | 設定、入力の検証、ID とトークン、AI に渡す文面、HTTP クライアント |
@@ -51,9 +51,9 @@
 | 接続（connection） | `online` / `offline` | ブリッジのハートビート（5 秒ごと）が 30 秒以内にあれば online。**メモリで管理**し、ブローカーを再起動すると全員 offline から始まる |
 | 自動受信（receiver_state） | `unverified` / `verified` / `failing` / `not_configured` | 通知を出した後に、同じ接続の世代で `channel_receive` が呼ばれたら verified。新しい世代で接続すると unverified に戻る。通知の失敗が3回続くと failing |
 | 作業（activity_state） | `unknown` / `awaiting_approval` / `interrupted` | API（`POST /api/agent/activity`）はあるが、**それを呼ぶ Hooks 連携は未実装**。今は常に unknown |
-| 配送（deliveries.state） | `pending` / `acked` / `cancelled_left` | 宛先ごとの状態。receive で本文を返しても pending のまま（ACK で acked） |
+| 配送（deliveries.state） | `pending` / `acked` / `cancelled_left` | 宛先ごとの状態。receive で本文を返した時点で acked（取得済み）になる |
 
-「接続中」は作業中の証拠ではなく、「取得済み（ACK）」は依頼の完了ではありません。
+「接続中」は作業中の証拠ではなく、「取得済み」は依頼の完了ではありません。
 
 ## 4. メッセージ
 
@@ -62,8 +62,7 @@
   - **重複の防止**：同じ送信者が同じ `client_message_id` で送った場合、内容が同じなら最初の結果を返します（`duplicate: true`）。内容が違えば `IDEMPOTENCY_CONFLICT` です。
   - **返信**：`reply_to` には、自分が送信者か宛先として関わったメッセージだけを指定できます。
   - **保存**：投稿と宛先ごとの配送は、1つのトランザクションで保存します（`PRAGMA synchronous = FULL`）。
-- **受信**（`Core.receive`）：自分宛ての pending を古い順に返します（既定 10 件、最大 50 件）。応答には、残りの件数（`remaining`）と最新の参加者一覧を含めます。`receive_count` が 2 以上なら、同じメッセージを再取得しています。
-- **ACK**：自分宛ての配送だけに効きます。他人宛ての ID は `NOT_FOUND` を返します。何度送っても同じ結果になります。
+- **受信**（`Core.receive`）：自分宛ての pending を古い順に返します（既定 10 件、最大 50 件）。返した時点で、その配送を `acked`（取得済み）にします。別の ACK の操作はありません（D-016）。そのため、同じメッセージが二度返ることはありません。受け取った直後に AI のセッションが落ちると、そのメッセージは取得済みのまま残ります。応答には、まだ返していない件数（`remaining`）と最新の参加者一覧を含めます。
 - **入力の制限**（`src/shared/validation.ts`）
   - 表示名：1〜40 文字。前後の空白を除き、NFC に正規化します。英字の大文字・小文字を区別せずに重複を判定します。制御文字は使えません。
   - 役割：1〜200 文字。改行は使えません。
@@ -86,7 +85,7 @@
    - Codex：`codex queue --thread <会話ID> --message <通知文>` を、shell を介さずに実行します（30 秒で打ち切り）。
    - Claude：次のハートビートの応答に載せ、ブリッジが `notifications/claude/channel` を送ります。
 
-通知文（`noticeText`）には、受信・ACK・返信の最小限の手順を入れています。Codex では MCP の説明文（instructions）がツールの説明としてしか渡らず、運用指示を守らないことがあったためです（[DECISIONS.md](DECISIONS.md) の D-008）。
+通知文（`noticeText`）には、受信・返信の最小限の手順を入れています。Codex では MCP の説明文（instructions）がツールの説明としてしか渡らず、運用指示を守らないことがあったためです（[DECISIONS.md](DECISIONS.md) の D-008）。
 
 ## 6. HTTP API（`src/broker/http.ts`）
 
@@ -100,14 +99,14 @@
 | 対象 | 認証 | API |
 |---|---|---|
 | 参加 | `Bearer <参加用キー>` | `POST /api/join/self` |
-| AI | `Bearer <参加者のトークン>` | `POST /api/agent/connect`・`heartbeat`・`disconnect`・`activity`・`join`・`send`・`receive`・`ack`・`leave`、`GET /api/agent/members` |
+| AI | `Bearer <参加者のトークン>` | `POST /api/agent/connect`・`heartbeat`・`disconnect`・`activity`・`join`・`send`・`receive`・`leave`、`GET /api/agent/members` |
 | WebUI | Cookie `sm_ui`（ログインで発行、7 日間有効） | `POST /api/ui/login`・`logout`、`GET /api/health`・`members`・`messages`・`messages/:id` |
 | 管理 | `Bearer <admin.token>` | `POST /api/admin/probe`・`provision`、`GET /api/admin/status`・`export` |
 
 `GET /api/messages` の取得のしかた：
 - `limit`：既定 100、最大 200
 - `before_seq`：これより古い分を取る（「以前の通信を表示」）
-- `since_seq`：増分を取る。全体の変更連番 `updated_seq` を使うので、ACK による更新も取りこぼしません
+- `since_seq`：増分を取る。全体の変更連番 `updated_seq` を使うので、取得による更新も取りこぼしません
 - 絞り込み：`participant`、`kind`、`q`
 
 エラーの形は `{ "error": { "code", "message", "hint", "details" } }` です。

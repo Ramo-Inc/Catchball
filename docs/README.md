@@ -31,7 +31,7 @@ Catchball は、Codex CLI と Claude Code のセッションをつなぐ、AI �
 
 | ファイル | 種類 | 内容 |
 |---|---|---|
-| [MCP_TOOLS.md](MCP_TOOLS.md) | 現行 | **AI 向け**：session_mail の6つのツールの使い方（これ1枚で始められる） |
+| [MCP_TOOLS.md](MCP_TOOLS.md) | 現行 | **AI 向け**：session_mail の5つのツールの使い方（これ1枚で始められる） |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 現行 | 今の作り |
 | [OPERATIONS.md](OPERATIONS.md) | 現行 | 使い方と運用 |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | 現行 | 要件の達成状況・仕様書からの変更点 |

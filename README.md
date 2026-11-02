@@ -33,7 +33,7 @@ flowchart LR
 ```
 
 - **通信の形**：真ん中のブローカーを経由する形（ブローカー型・ハブ＆スポーク）ですが、AI から見れば誰とでも直接やり取りできます（ピアツーピア）。相手が忙しいあいだはメッセージを保存しておき、後で届けます（ストア＆フォワード）。
-- **AI からの使い方**：各セッションには、ふつうの **MCP サーバー**として `session_mail` を登録します。AI からは6つのツール（`channel_join` / `members` / `send` / `receive` / `ack` / `leave`）として見えます。
+- **AI からの使い方**：各セッションには、ふつうの **MCP サーバー**として `session_mail` を登録します。AI からは5つのツール（`channel_join` / `members` / `send` / `receive` / `leave`）として見えます。
 - **届いたことの知らせ方**：Codex には `codex queue`、Claude には Channel 機能で知らせます。知らせを受けた AI は、自分で本文を取りに来ます。
 - **安全のための作り**：送信元は接続ごとの認証で決まり、AI が他人を名乗ることはできません。AI 用の API はこの PC の中だけで使えます。WebUI は閲覧専用で、ログインが必要です。
 
@@ -108,11 +108,11 @@ approval_mode = "prompt"                  # 退出だけは確認する
 claude mcp add --scope user session_mail -- node <Catchball>/dist/bridge/main.js
 ```
 
-さらに `~/.claude/settings.json` の `permissions.allow` に、次の5つを加えます（退出の `channel_leave` は加えません）。
+さらに `~/.claude/settings.json` の `permissions.allow` に、次の4つを加えます（退出の `channel_leave` は加えません）。
 
 ```json
 "mcp__session_mail__channel_join", "mcp__session_mail__channel_members", "mcp__session_mail__channel_send",
-"mcp__session_mail__channel_receive", "mcp__session_mail__channel_ack"
+"mcp__session_mail__channel_receive"
 ```
 
 ### 3. プロジェクトのフォルダーで AI を起動する
@@ -173,7 +173,7 @@ AI に詳しい使い方を教えたいときは、「docs/MCP_TOOLS.md を読�
 
 | ドキュメント | 内容 |
 |---|---|
-| [ツールの使い方（AI 向け）](docs/MCP_TOOLS.md) | session_mail の6つのツール、通知への反応、本文の書き方、エラー。これ1枚で始められる |
+| [ツールの使い方（AI 向け）](docs/MCP_TOOLS.md) | session_mail の5つのツール、通知への反応、本文の書き方、エラー。これ1枚で始められる |
 | [ドキュメントの案内](docs/README.md) | どれを読めばよいか、どれが正か |
 | [アーキテクチャ](docs/ARCHITECTURE.md) | 構成、状態、API、通知、セキュリティ、設定 |
 | [導入・運用](docs/OPERATIONS.md) | 手順、日常の操作、うまくいかないとき |
@@ -190,7 +190,7 @@ AI に詳しい使い方を教えたいときは、「docs/MCP_TOOLS.md を読�
 |---|---|
 | `src/broker/` | ブローカー（DB、業務処理、通知、HTTP API） |
 | `src/bridge/` | MCP ブリッジ（各セッションが起動する MCP サーバー） |
-| `src/cli/` | `session-mail`（AI 用の6操作）と `session-mail-admin`（管理用） |
+| `src/cli/` | `session-mail`（AI 用の5操作）と `session-mail-admin`（管理用） |
 | `src/web/` | WebUI |
 | `test/` | 自動試験 |
 | `poc/` | 受信経路を検証した最小実装（履歴） |

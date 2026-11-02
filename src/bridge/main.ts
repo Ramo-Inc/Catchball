@@ -98,14 +98,9 @@ server.registerTool('channel_send', {
 }, async a => tool('POST', '/api/agent/send', a, true));
 
 server.registerTool('channel_receive', {
-  description: '自分宛ての未取得メッセージの本文を古い順に返す。remaining が 0 になるまで繰り返す。receive_count が 2 以上なら以前にも受け取った同じメッセージ。',
+  description: '自分宛ての未取得メッセージの本文を古い順に返す。返した時点で取得済み（既読）になり、二度は返らない。remaining が 0 になるまで繰り返す。',
   inputSchema: { limit: z.number().int().min(1).max(50).optional() },
 }, async ({ limit }) => tool('POST', '/api/agent/receive', { limit }));
-
-server.registerTool('channel_ack', {
-  description: '本文を取得したことを記録する。依頼の完了報告ではない（完了は channel_send で報告する）。',
-  inputSchema: { message_ids: z.array(z.string()).min(1).max(100) },
-}, async ({ message_ids }) => tool('POST', '/api/agent/ack', { message_ids }));
 
 server.registerTool('channel_leave', {
   description: 'チャンネルから退出する。自分宛ての未取得は配送停止になる。ユーザーまたは統括に指示されたときだけ使う。',
