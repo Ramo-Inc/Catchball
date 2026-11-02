@@ -115,11 +115,17 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
         throw new ApiError('UNAUTHENTICATED', 401, 'トークンが正しくありません。session-mail-admin viewer-token で確認してください。');
       }
       failures.delete(ip);
+      core.purgeExpired('ui_session');
       const s = core.createCredential('ui_session', null, UI_SESSION_TTL);
       c.res.setHeader('Set-Cookie', `sm_ui=${s}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${UI_SESSION_TTL / 1000}`);
       return { ok: true };
     },
-    'POST /api/ui/logout': c => { c.res.setHeader('Set-Cookie', 'sm_ui=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'); return { ok: true }; },
+    'POST /api/ui/logout': c => {
+      // ブラウザーの Cookie を消すだけでなく、サーバー側でもこのセッションを無効にする（写した Cookie を使えなくする）
+      if (c.cookie) core.revokeToken(c.cookie, 'ui_session', 'logout');
+      c.res.setHeader('Set-Cookie', 'sm_ui=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+      return { ok: true };
+    },
     'GET /api/health': c => { ui(c); return { ok: true, now: core.now(), max_seq: core.maxSeq() }; },
     'GET /api/ui/rooms': c => { ui(c); return { rooms: core.db.all('SELECT room_id AS room, created_at FROM rooms ORDER BY room_id') }; },
     'GET /api/members': c => {
@@ -245,5 +251,9 @@ async function readBody(req: IncomingMessage, max: number): Promise<any> {
     chunks.push(c as Buffer);
   }
   const text = Buffer.concat(chunks).toString('utf8');
-  try { return text ? JSON.parse(text) : {}; } catch { throw new ApiError('INVALID_ARGUMENT', 400, 'JSON の形式が正しくありません。'); }
+  let v: unknown;
+  try { v = text ? JSON.parse(text) : {}; } catch { throw new ApiError('INVALID_ARGUMENT', 400, 'JSON の形式が正しくありません。'); }
+  // 本文は JSON のオブジェクトだけを受け付ける（null や配列だと、項目を読むところで内部エラーになるため）
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new ApiError('INVALID_ARGUMENT', 400, '本文は JSON のオブジェクト（{ ... }）にしてください。');
+  return v;
 }

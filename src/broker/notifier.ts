@@ -36,14 +36,18 @@ export class Notifier {
         WHERE d.recipient_pid = ? AND d.state = 'pending' AND d.first_received_at IS NULL AND d.created_seq > ?`, p.pid, ns.known_seq)!;
       const now = this.core.now();
       const cfg = this.core.cfg.notify;
-      let reason: 'reconnect' | 'new' | 'renotify' | null = null;
+      let reason: 'reconnect' | 'new' | 'renotify' | 'retry' | null = null;
+      const retry = cfg.retry_after_failure_ms;
       if (ns.force_on_connect) reason = 'reconnect';
       else if (!ns.outstanding_notify_id && fresh.n > 0 && now - fresh.newest >= cfg.debounce_ms) reason = 'new';
       else if (p.provider === 'claude' && ns.outstanding_notify_id && ns.last_notify_at
         && now >= ns.last_notify_at + cfg.claude_renotify_backoff_ms[Math.min(ns.renotify_streak, cfg.claude_renotify_backoff_ms.length - 1)]) reason = 'renotify';
+      // 通知に失敗したまま、新着も再接続もないと、未取得が残っていても誰も知らせない。間隔を空けて送り直す（Codex・Claude とも）
+      else if (!ns.outstanding_notify_id && ns.last_notify_result === 'failed' && ns.last_notify_at
+        && now >= ns.last_notify_at + retry[Math.min(Math.max(ns.consecutive_failures - 1, 0), retry.length - 1)]) reason = 'retry';
       if (!reason) continue;
       if (reason === 'new' && p.provider === 'codex' && now - this.core.lastToolUse(p.pid) < cfg.codex_quiet_after_tool_ms) continue;
-      void this.dispatch(p, reason, pend.n, pend.max_seq);
+      this.dispatch(p, reason, pend.n, pend.max_seq).catch(e => this.log(`notify ${p.room_id}/${p.agent_id} の処理に失敗: ${(e as Error).message}`));
     }
   }
 
@@ -60,23 +64,27 @@ export class Notifier {
       WHERE d.recipient_pid = ? AND d.state = 'pending' ORDER BY m.sender_id`, p.pid).map(r => r.sender_id);
     const text = reason === 'probe' ? PROBE_TEXT : noticeText(unread, senders);
     this.inflight.add(p.pid);
-    db.run(`UPDATE notify_state SET outstanding_notify_id = COALESCE(outstanding_notify_id, ?), outstanding_since = COALESCE(outstanding_since, ?),
-      outstanding_generation = ?, force_on_connect = 0, known_seq = MAX(known_seq, ?) WHERE pid = ?`,
-      notify_id, this.core.now(), p.conn_generation, maxSeq ?? 0, p.pid);
+    // 例外になっても、通知中の印は必ず外す（外さないと、以後この参加者に通知しなくなる）
+    try {
+      db.run(`UPDATE notify_state SET outstanding_notify_id = COALESCE(outstanding_notify_id, ?), outstanding_since = COALESCE(outstanding_since, ?),
+        outstanding_generation = ?, force_on_connect = 0, known_seq = MAX(known_seq, ?) WHERE pid = ?`,
+        notify_id, this.core.now(), p.conn_generation, maxSeq ?? 0, p.pid);
 
-    let result: string, error: string | null = null;
-    if (p.receiver_kind === 'claude_channel') {
-      this.pendingChannel.set(p.pid, { notify_id, content: text, meta: { kind: reason === 'probe' ? 'probe' : 'mail_notice', notify_id, unread: String(unread) } });
-      result = 'handed_to_bridge';
-    } else {
-      const r = await this.codexQueue(p.conversation_id, text);
-      result = r.ok ? 'queued_ok' : 'failed';
-      error = r.error;
+      let result: string, error: string | null = null;
+      if (p.receiver_kind === 'claude_channel') {
+        this.pendingChannel.set(p.pid, { notify_id, content: text, meta: { kind: reason === 'probe' ? 'probe' : 'mail_notice', notify_id, unread: String(unread) } });
+        result = 'handed_to_bridge';
+      } else {
+        const r = await this.codexQueue(p.conversation_id, text);
+        result = r.ok ? 'queued_ok' : 'failed';
+        error = r.error;
+      }
+      this.record(p.pid, notify_id, reason, result, error);
+      this.log(`notify ${p.room_id}/${p.agent_id} ${reason} ${result}${error ? ' ' + error : ''}`);
+      return { notify_id, result };
+    } finally {
+      this.inflight.delete(p.pid);
     }
-    this.record(p.pid, notify_id, reason, result, error);
-    this.inflight.delete(p.pid);
-    this.log(`notify ${p.room_id}/${p.agent_id} ${reason} ${result}${error ? ' ' + error : ''}`);
-    return { notify_id, result };
   }
 
   private codexQueue(thread: string, text: string): Promise<{ ok: boolean; error: string | null }> {

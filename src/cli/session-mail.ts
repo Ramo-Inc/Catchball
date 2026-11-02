@@ -45,4 +45,5 @@ async function main(): Promise<number> {
   return r.ok ? 0 : r.status === 0 ? 4 : r.status === 401 ? 3 : 2;
 }
 
-main().then(code => { process.exitCode = code; });
+// トークンファイルや本文のファイルが読めないなど、想定外の失敗も、理由を書いて終わる
+main().then(code => { process.exitCode = code; }).catch(e => { console.error(`エラー: ${(e as Error).message}`); process.exitCode = 3; });

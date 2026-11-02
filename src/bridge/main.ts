@@ -48,9 +48,41 @@ function brokerUrl(): string {
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
 const result = (data: unknown, isError = false): ToolResult => ({ isError: isError || undefined, content: [{ type: 'text', text: JSON.stringify(data, null, 1) }] });
 
+// このセッションの接続が使えなくなった理由（ハートビートで分かったもの）。ツールを呼ばれたら、これを返す
+let stoppedReason: { code: string; message: string; hint: string } | null = null;
+// 会話の中から参加したセッションで、キーが無効になって参加していない状態に戻ったとき、その理由を次のツールの結果で1回だけ伝える
+let revokedNotice: { code: string; message: string; hint: string } | null = null;
+
+// キーが無効になった（同じルーム・同じ ID に別のセッションが参加した、ルームが削除された）。
+// 会話の中から参加したセッションは、参加していない状態に戻し、もう一度 channel_join できるようにする（自動では参加し直さない）
+function revoked(): { code: string; message: string; hint: string } {
+  if (!tokenFileMode) {
+    bound = null;
+    generation = 0;
+    results = [];
+    return revokedNotice = { code: 'UNAUTHENTICATED', message: 'このセッションの参加は無効になりました。同じルーム・同じ ID に別のセッションが参加したか、ルームが削除されました。',
+      hint: '続けるなら、どのルームと ID で参加するかユーザーに確認してから、channel_join してください。' };
+  }
+  return { code: 'UNAUTHENTICATED', message: 'トークンファイルのキーが無効になっています。',
+    hint: 'ユーザーに、session-mail-admin provision でトークンファイルを作り直して、このセッションを起動し直してもらってください。' };
+}
+
 async function tool(method: 'GET' | 'POST', path: string, body?: unknown, retry = false): Promise<ToolResult> {
-  if (!bound) return result({ error: { code: 'NOT_JOINED', message: 'まだルームに参加していません。', hint: 'channel_join で参加してください。' } }, true);
-  const r = await call(bound, method, path, body, retry);
+  if (stoppedReason) return result({ error: stoppedReason }, true);
+  if (!bound) {
+    const notice = revokedNotice;
+    revokedNotice = null;
+    return result({ error: notice ?? { code: 'NOT_JOINED', message: 'まだルームに参加していません。', hint: 'channel_join で参加してください。' } }, true);
+  }
+  const was = bound;
+  const r = await call(was, method, path, body, retry);
+  if (r.status === 401) {
+    if (bound !== was) return result({ error: r.data.error }, true);  // 待っている間に参加し直していた
+    const e = revoked();
+    if (tokenFileMode) stoppedReason = e;
+    else revokedNotice = null;  // この結果で伝えるので、次には持ち越さない
+    return result({ error: e }, true);
+  }
   return result(r.data, !r.ok);
 }
 
@@ -109,6 +141,7 @@ server.registerTool('channel_join', {
   if (!r.ok) return result(r.data, true);
   const { token, agent_id, room, duty, ...rest } = r.data as { token: string; agent_id: string; room: string; duty: Duty };
   bound = { version: 2, broker_url: k.broker_url, room, agent_id, provider: provider(), duty, token };
+  revokedNotice = null;
   generation = 0;
   results = [];
   logErr(`joined ${room} as ${agent_id}`);
@@ -172,35 +205,50 @@ server.registerTool('channel_rooms', {
 
 // ---- ハートビート ------------------------------------------------------------
 let generation = 0;
+let interval = 5000;  // 接続したときにブローカーが返す heartbeat_interval_ms を使う
 let results: { notify_id: string; result: 'written' | 'error'; error?: string }[] = [];
 let beating: Promise<void> | null = null;
 let stopped = false;
 
 function beat(): Promise<void> {
-  if (!bound || beating) return beating ?? Promise.resolve();
+  if (!bound || stoppedReason || beating) return beating ?? Promise.resolve();
   beating = beatOnce().finally(() => { beating = null; });
   return beating;
 }
 
 async function beatOnce(): Promise<void> {
-  if (!bound) return;
+  // 応答を待っている間に、退出や参加し直しで bound が入れ替わったら、その応答は使わない
+  const b = bound;
+  if (!b) return;
   try {
     if (generation === 0) {
-      const r = await call(bound, 'POST', '/api/agent/connect', { bridge_version: VERSION, pid: process.pid, provider: bound.provider });
+      const r = await call(b, 'POST', '/api/agent/connect', { bridge_version: VERSION, pid: process.pid, provider: b.provider });
+      if (bound !== b) return;
+      if (r.status === 401) { stopOnRevoked(); return; }
       if (!r.ok) { logErr(`connect 失敗: ${JSON.stringify(r.data.error ?? r.status)}`); return; }
       generation = r.data.generation;
+      if (Number.isFinite(r.data.heartbeat_interval_ms) && r.data.heartbeat_interval_ms >= 1000) interval = r.data.heartbeat_interval_ms;
       logErr(`connected generation=${generation}`);
     }
     const sending = results;
     results = [];
-    const r = await call(bound, 'POST', '/api/agent/heartbeat', { generation, notify_results: sending });
+    const r = await call(b, 'POST', '/api/agent/heartbeat', { generation, notify_results: sending });
+    if (bound !== b) return;
     if (!r.ok) {
       if (r.status !== 0) results.unshift(...sending);
-      generation = 0;
+      if (r.status === 401) { stopOnRevoked(); return; }
+      // 同じトークンファイルの別のセッションが、あとから接続した。取り返しに行くと、互いに接続を奪い合い続けるので止まる
+      if (r.data?.error?.code === 'STALE_GENERATION') {
+        stoppedReason = { code: 'SESSION_SUPERSEDED', message: '同じトークンファイルを使う別のセッションが接続したので、このセッションは通信を止めました。',
+          hint: 'ユーザーに伝えてください。このセッションを使うなら、もう一方のセッションを終了してから、このセッションを起動し直します。' };
+        logErr('superseded by another bridge; heartbeat stopped');
+        return;
+      }
+      if (r.status !== 0) generation = 0;
       return;
     }
     const n = r.data.notify;
-    if (n && bound.provider === 'claude') {
+    if (n && b.provider === 'claude') {
       try {
         await server.server.notification({ method: 'notifications/claude/channel', params: { content: n.content, meta: n.meta } });
         results.push({ notify_id: n.notify_id, result: 'written' });
@@ -213,12 +261,18 @@ async function beatOnce(): Promise<void> {
   }
 }
 
+function stopOnRevoked(): void {
+  const e = revoked();
+  if (tokenFileMode) stoppedReason = e;
+  logErr('token revoked; heartbeat stopped');
+}
+
 async function shutdown(): Promise<void> {
   if (stopped) return;
   stopped = true;
   // 接続の途中で終了するときは、接続が終わるのを待ってから切断を伝える（待つのは最大1秒）
   if (beating) await Promise.race([beating, new Promise(r => setTimeout(r, 1000))]);
-  if (bound && generation > 0) {
+  if (bound && generation > 0 && !stoppedReason) {
     await Promise.race([call(bound, 'POST', '/api/agent/disconnect', { generation }), new Promise(r => setTimeout(r, 1000))]);
   }
   process.exit(0);
@@ -226,8 +280,9 @@ async function shutdown(): Promise<void> {
 
 await server.connect(new StdioServerTransport());
 logErr(bound ? `started with token file (provider=${bound.provider})` : 'started; waiting for channel_join');
-setInterval(() => void beat(), 5000);
-void beat();
+// 間隔は接続のたびに変わり得るので、毎回次の予定を立てる
+const loop = async () => { await beat(); setTimeout(() => void loop(), interval); };
+void loop();
 process.stdin.on('end', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());
 process.on('SIGINT', () => void shutdown());

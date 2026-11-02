@@ -17,7 +17,7 @@ Catchball は、Codex CLI と Claude Code のセッションをつなぐ AI エ�
 ```bash
 npm ci
 npm run build    # tsc と WebUI のコピー（dist/ に出力）
-npm test         # build してから test/main.test.mjs を実行（21件）
+npm test         # build してから test/main.test.mjs を実行（26件）
 ```
 
 - 試験は `node --test test/main.test.mjs` のようにファイルを指定します。Node 22 では `node --test test/` のようにフォルダーを指定すると失敗します。

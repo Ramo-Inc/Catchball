@@ -184,7 +184,7 @@
 | `ROOM_NOT_FOUND` | そのルームはない | **自分で作らない。** どのルームに入るかユーザーに尋ねる |
 | `ROOM_EXISTS` | 同じ ID のルームがすでにある | ユーザーに、そのルームを使うか別の ID にするか確認する |
 | `ROOM_NOT_EMPTY` | 退出していない参加者がいるので、削除できない | `message` に残っている ID がある。ユーザーに確認する |
-| `BROKER_NOT_READY` / `BROKER_UNAVAILABLE` | ブローカーが起動していない | ユーザーに起動を頼む。送信は受理されていないので、後で同じ `client_message_id` で再送する |
+| `BROKER_NOT_READY` / `BROKER_UNAVAILABLE` | ブローカーが起動していない・応答しない | ユーザーに起動を頼む。送信が受理されたかは分からないので、後で同じ `client_message_id` で再送する（受理済みでも二重には投稿されない） |
 | `NAME_TAKEN` | 表示名が他の人と同じ | 別の表示名で `channel_join` |
 | `AGENT_IN_USE` | その ID は別のセッションが接続中 | **別の ID は使わない。** ユーザーに伝えて、前のセッションが終了したか確認してもらう |
 | `UNKNOWN_RECIPIENT` / `RECIPIENT_NOT_JOINED` | 宛先が自分のルームにいない・参加していない | `channel_members` で ID と状態を確かめる |
@@ -192,7 +192,8 @@
 | `INVALID_REPLY_TO` | 返信先が、自分の関わっていないメッセージ | 自分が受け取った・送った `message_id` を使う |
 | `IDEMPOTENCY_CONFLICT` | 同じ `client_message_id` を、別の内容で使った | 新しい `client_message_id` で送る |
 | `INVALID_ARGUMENT` / `PAYLOAD_TOO_LARGE` | 引数の形が違う・長すぎる・足りない（参加のルームや ID、Codex の会話 ID がないなど） | `message` と `hint` を見て直す。参加のルームや ID が分からなければユーザーに尋ねる。長い本文は分ける |
-| `UNAUTHENTICATED` | 認証に失敗した | ユーザーに接続設定の確認を頼む |
+| `UNAUTHENTICATED` | 認証に失敗した。会話の中から参加した場合は、同じルーム・同じ ID に別のセッションが参加したか、ルームが削除されて、参加が無効になった | 会話の中から参加した場合は、どのルームと ID で参加するかユーザーに確認してから `channel_join` する。トークンファイルの場合は、ユーザーに接続設定の確認を頼む |
+| `SESSION_SUPERSEDED` | 同じトークンファイルを使う別のセッションが接続したので、このセッションは通信を止めた | ユーザーに伝える |
 | `INVALID_TOKEN_FILE` | 起動時に渡されたトークンファイルが古い形式などで読めない | ユーザーに、`provision --room` でトークンファイルを作り直してもらう |
 
 ## 7. 守ること

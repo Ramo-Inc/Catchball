@@ -17,7 +17,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const UI_PORT = PORT + 1000;
 const FAKE_LOG = join(HOME, 'fake-codex.log');
 const env = { ...process.env, SESSION_MAIL_HOME: HOME, FAKE_CODEX_LOG: FAKE_LOG };
-writeFileSync(join(HOME, 'config.json'), JSON.stringify({ port: PORT, ui: { lan: true, port: UI_PORT, allowed_hosts: ['monitor.example'] }, codex: { command: [process.execPath, join(ROOT, 'test/fake-codex.mjs')] }, notify: { codex_quiet_after_tool_ms: 0 } }));
+writeFileSync(join(HOME, 'config.json'), JSON.stringify({ port: PORT, ui: { lan: true, port: UI_PORT, allowed_hosts: ['monitor.example'] }, codex: { command: [process.execPath, join(ROOT, 'test/fake-codex.mjs')] }, notify: { codex_quiet_after_tool_ms: 0, retry_after_failure_ms: [1500] } }));
 
 const admin = (...a) => execFileSync(process.execPath, ['--no-warnings', join(ROOT, 'dist/cli/admin.js'), ...a], { env, encoding: 'utf8' });
 const tokPath = (id, room = 'r1') => join(HOME, 'tokens', `room-${room.replace(/[A-Z]/g, c => '!' + c.toLowerCase()).replace(/\./g, '~')}`, `${id}.json`);
@@ -530,6 +530,80 @@ test('ルーム：新しい DB で始め、前の DB は読まずに残す', asy
   const viewer = readFileSync(join(HOME, 'tokens', 'viewer.token'), 'utf8').trim();
   assert.notEqual(viewer, 'sm1.c_00000000000000000000000000.oldviewer', '閲覧用トークンは発行し直す');
   assert.equal((await req('POST', '/api/ui/login', { body: { token: 'sm1.c_00000000000000000000000000.oldviewer' }, origin: BASE })).status, 401);
+});
+
+// ---- レビューの指摘への対応（review-1） ----
+const startTokenBridge = async (id, room = 'r1', onChannel) => {
+  const t = new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'dist/bridge/main.js')], env: { ...env, SESSION_MAIL_TOKEN_FILE: tokPath(id, room) }, stderr: 'pipe' });
+  const c = new Client({ name: 'claude-code', version: '0' });
+  c.fallbackNotificationHandler = async n => { if (n.method === 'notifications/claude/channel') onChannel?.(n.params); };
+  await c.connect(t); clients.push(c);
+  const call = async (name, args = {}) => { const r = await c.callTool({ name, arguments: args }); return { isError: !!r.isError, data: JSON.parse(r.content[0].text) }; };
+  return { c, t, call };
+};
+
+test('通知：失敗したら、新着がなくても間隔を空けて送り直す', async () => {
+  admin('provision', '--room', 'r1', '--agent', 'ft', '--provider', 'codex', '--conversation', 'fail-thread');
+  const b = await startTokenBridge('ft');
+  await b.call('channel_join', { display_name: '通知失敗', role: 'x' });
+  await until(async () => (await memberOf('ft'))?.connection === 'online', 10000, 'ft が接続中になる');
+  const before = queueCalls().filter(c => c[2] === 'fail-thread').length;
+  await A('main', 'send', { to: 'ft', body: '届かない通知', client_message_id: 'main-ft-1' });
+  await until(() => queueCalls().filter(c => c[2] === 'fail-thread').length >= before + 3, 15000, '失敗した通知の送り直し');
+  await until(async () => (await memberOf('ft')).auto_receive === 'failing', 5000, '失敗が続くと「失敗」になる');
+});
+
+test('HTTP：本文が JSON のオブジェクトでなければ 400、ログアウトしたセッションは使えない', async () => {
+  for (const body of [null, [], 'x']) {
+    const r = await A('main', 'send', body);
+    assert.equal(r.status, 400, `本文 ${JSON.stringify(body)}`);
+    assert.equal(r.data.error.code, 'INVALID_ARGUMENT');
+  }
+  const viewer = readFileSync(join(HOME, 'tokens', 'viewer.token'), 'utf8').trim();
+  const cookie = (await req('POST', '/api/ui/login', { body: { token: viewer }, origin: BASE })).headers.get('set-cookie').split(';')[0];
+  assert.equal((await req('GET', '/api/ui/rooms', { cookie })).status, 200);
+  assert.equal((await req('POST', '/api/ui/logout', { body: {}, origin: BASE, cookie })).status, 200);
+  assert.equal((await req('GET', '/api/ui/rooms', { cookie })).status, 401, 'ログアウトした Cookie を写して使っても入れない');
+});
+
+test('ブリッジ：ID を引き継がれたセッションは、理由を知らされ、参加し直せる', async () => {
+  await J('POST', 'rooms', { room: 'tk' });
+  const old = await startBridge('claude');
+  assert.equal((await old.call('channel_join', { room: 'tk', agent_id: 'dev', display_name: '前の担当', role: 'x' })).isError, false);
+  const pid = old.c.transport.pid;
+  process.kill(pid, 'SIGSTOP');  // 固まったセッション（ハートビートが止まる）
+  try {
+    const watch = (await selfJoin({ room: 'tk', agent_id: 'watch' })).data.token;
+    const tkMember = async () => (await AT(watch, 'members')).data.members.find(m => m.id === 'dev');
+    await until(async () => (await tkMember())?.connection === 'offline', 45000, '前のセッションが切断中になる');
+    assert.equal((await selfJoin({ room: 'tk', agent_id: 'dev', display_name: '後任' })).status, 200, '切断中なので引き継げる');
+  } finally { process.kill(pid, 'SIGCONT'); }
+  const r = await until(async () => { const x = await old.call('channel_members'); return x.data.error?.code === 'UNAUTHENTICATED' || x.data.error?.code === 'NOT_JOINED' ? x : null; }, 15000, '前のセッションの状態');
+  assert.equal(r.data.error.code, 'UNAUTHENTICATED', '参加が無効になった理由を伝える');
+  assert.match(r.data.error.hint, /ユーザーに確認/);
+  const again = await old.call('channel_join', { room: 'tk', agent_id: 'dev2', display_name: '前の担当', role: 'x' });
+  assert.equal(again.isError, false, '起動し直さずに、別の ID で参加し直せる');
+});
+
+test('ブリッジ：同じトークンファイルで2つ起動すると、前のほうは止まり、取り合わない', async () => {
+  admin('provision', '--room', 'r1', '--agent', 'dup', '--provider', 'claude', '--conversation', 'S-DUP');
+  const a = await startTokenBridge('dup');
+  await a.call('channel_join', { display_name: '二重起動', role: 'x' });
+  await until(async () => (await memberOf('dup'))?.connection === 'online', 10000, 'dup が接続中になる');
+  const b = await startTokenBridge('dup');
+  const stopped = await until(async () => { const x = await a.call('channel_members'); return x.data.error?.code === 'SESSION_SUPERSEDED' ? x : null; }, 20000, '前のほうが止まる');
+  assert.match(stopped.data.error.hint, /もう一方のセッションを終了/);
+  assert.equal((await b.call('channel_members')).isError, false, 'あとのほうは使える');
+});
+
+test('設定：型や範囲が正しくなければ、項目を書いて止まる', async () => {
+  const h = mkdtempSync(join(tmpdir(), 'sm-cfg-'));
+  writeFileSync(join(h, 'config.json'), JSON.stringify({ notify: { claude_renotify_backoff_ms: [] } }));
+  assert.throws(() => execFileSync(process.execPath, [join(ROOT, 'dist/cli/admin.js'), 'status'], { env: { ...process.env, SESSION_MAIL_HOME: h }, encoding: 'utf8', stdio: 'pipe' }),
+    e => /notify\.claude_renotify_backoff_ms/.test(e.stderr));
+  writeFileSync(join(h, 'config.json'), JSON.stringify({ codex: { command: 'codex' } }));
+  assert.throws(() => execFileSync(process.execPath, [join(ROOT, 'dist/cli/admin.js'), 'status'], { env: { ...process.env, SESSION_MAIL_HOME: h }, encoding: 'utf8', stdio: 'pipe' }),
+    e => /codex\.command/.test(e.stderr));
 });
 
 test('ドキュメント：docs/MCP_TOOLS.md が実際のツールと必須の引数をすべて説明している', async () => {

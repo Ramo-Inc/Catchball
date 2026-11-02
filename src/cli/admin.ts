@@ -34,10 +34,16 @@ const lockPath = () => join(dir(), 'broker.lock');
 // ルームを入れた版（D-018）から、新しいファイルにする。前の session-mail.db は読まずに、そのまま置いておく
 const dbPath = () => join(dir(), 'session-mail-v2.db');
 
-function brokerRunning(): boolean {
+// ロックファイルの pid が生きていて、しかもブローカーの待ち受けが応答するときだけ「稼働中」とする
+// （PC の再起動などで、別のプロセスが同じ pid を使っていることがあるため）
+async function brokerRunning(): Promise<boolean> {
   if (!existsSync(lockPath())) return false;
   const pid = Number(readFileSync(lockPath(), 'utf8'));
-  try { process.kill(pid, 0); return true; } catch { return false; }
+  try { process.kill(pid, 0); } catch { return false; }
+  try {
+    await fetch(`http://127.0.0.1:${loadConfig().port}/api/health`, { signal: AbortSignal.timeout(1500) });
+    return true;  // 401 でも、応答があればブローカーが動いている
+  } catch { return false; }
 }
 
 function writeSecret(name: string, content: string): string {
@@ -67,8 +73,8 @@ async function adminCall(method: string, path: string, body?: unknown) {
 }
 
 // DB を直接開く操作（ブローカーが止まっているときだけ）
-function withCore<T>(fn: (core: Core) => T): T {
-  if (brokerRunning()) throw new Error('ブローカーが稼働中です。先に止めてから実行してください（DB を開けるのはブローカーだけです）。');
+async function withCore<T>(fn: (core: Core) => T): Promise<T> {
+  if (await brokerRunning()) throw new Error('ブローカーが稼働中です。先に止めてから実行してください（DB を開けるのはブローカーだけです）。');
   const db = new Db(dbPath());
   try { return fn(new Core(db, loadConfig())); } finally { db.close(); }
 }
@@ -79,7 +85,7 @@ async function main(): Promise<number> {
   const cfg = loadConfig();
   switch (cmd) {
     case 'serve': {
-      if (brokerRunning()) { console.error('ブローカーはすでに起動しています。'); return 2; }
+      if (await brokerRunning()) { console.error('ブローカーはすでに起動しています。'); return 2; }
       writeFileSync(lockPath(), String(process.pid));
       const fresh = !existsSync(dbPath());
       const db = new Db(dbPath());
@@ -97,6 +103,12 @@ async function main(): Promise<number> {
       if (!existsSync(joinKeyPath)) writeSecret('join.key', randomBytes(32).toString('base64url'));
       const joinKeyHash = sha256(readFileSync(joinKeyPath, 'utf8').trim());
       const server = createBroker(core, notifier, log, 'local', joinKeyHash);
+      // ポートが使われているなどで待ち受けられないときは、理由を書いて止まる（ロックファイルも消す）
+      server.on('error', e => {
+        log(`ブローカーを起動できませんでした（ポート ${cfg.port}）: ${(e as Error).message}`);
+        notifier.stop(); db.close(); try { unlinkSync(lockPath()); } catch { /* 既に無い */ }
+        process.exit(1);
+      });
       server.listen(cfg.port, '127.0.0.1', () => {
         log(`session-mail ブローカー起動 http://127.0.0.1:${cfg.port}/ （データ: ${dataDir()}）`);
         log(`WebUI のログイン用トークン: session-mail-admin viewer-token で表示できます`);
@@ -123,9 +135,9 @@ async function main(): Promise<number> {
       const provider = o.provider as Provider, duty = (o.duty ?? 'worker') as Duty;
       if (!o.room || !o.agent || !['codex', 'claude'].includes(provider) || !o.conversation || !['coordinator', 'worker'].includes(duty)) { console.error(USAGE); return 2; }
       const args = { room: o.room, agent: o.agent, provider, conversation: o.conversation, duty, rotate: o.rotate === 'true' };
-      const { token, room } = brokerRunning()
+      const { token, room } = await brokerRunning()
         ? await adminCall('POST', '/api/admin/provision', args)
-        : withCore(core => core.provision(args));
+        : await withCore(core => core.provision(args));
       const tf: TokenFile = { version: 2, broker_url: `http://127.0.0.1:${cfg.port}`, room, agent_id: o.agent, provider, duty, token };
       const p = writeSecret(join(roomFolder(room), `${o.agent}.json`), JSON.stringify(tf, null, 2));
       console.log(`登録しました: ルーム ${room} の ${o.agent}（${provider}、${duty}）\nトークンファイル: ${p}\n`);
@@ -138,7 +150,7 @@ async function main(): Promise<number> {
       return 0;
     }
     case 'viewer-token': {
-      if (o.rotate === 'true') withCore(core => { core.revokeCredentials('viewer', null, 'rotated'); writeSecret('viewer.token', core.createCredential('viewer')); });
+      if (o.rotate === 'true') await withCore(core => { core.revokeCredentials('viewer', null, 'rotated'); writeSecret('viewer.token', core.createCredential('viewer')); });
       const p = join(dir(), 'tokens', 'viewer.token');
       if (!existsSync(p)) { console.error('まだ発行されていません。先に serve を一度起動してください。'); return 2; }
       console.log(readFileSync(p, 'utf8').trim());
@@ -157,7 +169,9 @@ async function main(): Promise<number> {
       if (!room || !id) { console.error(USAGE); return 2; }
       const r = await adminCall('POST', '/api/admin/probe', { room, agent_id: id });
       console.log(`確認の通知を送りました（${r.result}）。受信を待っています…`);
-      const until = Date.now() + Number(o.wait ?? 120) * 1000;
+      const wait = Number(o.wait ?? 120);
+      if (!Number.isFinite(wait) || wait <= 0) { console.error('--wait には秒数を指定してください（例 --wait 120）。'); return 2; }
+      const until = Date.now() + wait * 1000;
       while (Date.now() < until) {
         await new Promise(res => setTimeout(res, 2000));
         const m = (await adminCall('GET', '/api/admin/status')).members.find((x: any) => x.room === room && x.id === id);
