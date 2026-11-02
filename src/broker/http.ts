@@ -1,4 +1,4 @@
-// HTTP API と WebUI の配信（DESIGN §5）
+// HTTP API と WebUI の配信
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
 import { hostname } from 'node:os';

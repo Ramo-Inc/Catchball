@@ -1,4 +1,4 @@
-// 業務処理（DESIGN §4）：ルーム・参加・送信・受信（取得したら既読）・接続・表示用の集計
+// 業務処理：ルーム・参加・送信・受信（取得したら既読）・接続・表示用の集計
 // 参加者は「ルームと ID の組み」で決まる（D-018）。内部では参加者の番号（pid）で指し、AI や画面には ID を見せる
 import { Db, Row } from './db.js';
 import { Config, Duty, Provider } from '../shared/config.js';
@@ -31,9 +31,9 @@ const REASON = {
 const roomNotFound = (room: string, hint?: string) => new ApiError('ROOM_NOT_FOUND', 404, `ルーム ${room} はありません。`, hint);
 
 export class Core {
-  // 接続状態はメモリで持つ（REVIEW-2 N4）。起動直後は全員 offline。鍵は参加者の番号（pid）
+  // 接続状態はメモリで持つ（D-010）。起動直後は全員 offline。鍵は参加者の番号（pid）
   private lastSeen = new Map<number, number>();
-  // Codex 向けの通知を遅らせる判断に使う（PoC R2）。鍵は参加者の番号。書くのは markToolUse だけにして、鍵の取り違えを型で防ぐ
+  // Codex 向けの通知を遅らせる判断に使う。鍵は参加者の番号。書くのは markToolUse だけにして、鍵の取り違えを型で防ぐ
   private readonly lastToolAt = new Map<number, number>();
   onSent: (recipients: string[]) => void = () => {};
 

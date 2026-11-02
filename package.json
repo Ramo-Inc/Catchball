@@ -3,7 +3,7 @@
   "version": "1.0.0-alpha.1",
   "private": true,
   "type": "module",
-  "description": "AI通信チャンネル MVP：Codex CLI / Claude Code のセッション間で依頼・報告をやり取りし、WebUI で観察する",
+  "description": "Catchball：Codex CLI と Claude Code のセッションを、ルームごとにつなぐ AI エージェント間のメッセージバス（WebUI で見守れる）",
   "engines": {
     "node": ">=22.13"
   },

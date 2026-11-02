@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 管理者用 CLI（DESIGN §6.5）。モデルのツールには公開しない
+// 管理者用 CLI（session-mail-admin）。モデルのツールには公開しない
 import { existsSync, readFileSync, writeFileSync, unlinkSync, appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { hostname, networkInterfaces } from 'node:os';

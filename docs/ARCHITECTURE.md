@@ -1,4 +1,4 @@
-# アーキテクチャ（v1.0.0-alpha.1 時点の実装）
+# アーキテクチャ（`main` の今の実装）
 
 この文書は、今のコードがどう動くかを書いたものです。食い違いがあればコードが正です（[docs/README.md](README.md) の「どれが正か」を参照）。
 
@@ -16,7 +16,7 @@
 |---|---|---|
 | ブローカー | `src/broker/`（起動は `session-mail-admin serve`） | 認証、メッセージの保存と配送、接続状態、通知、HTTP API、WebUI の配信。DB を開くのはこのプロセスだけ |
 | ブリッジ | `src/bridge/main.ts` | 各 AI セッションが stdio で起動する MCP サーバー。8つのツール（ルームの操作3つを含む）を提供し、5秒ごとにハートビートを送る。Claude には Channel 通知を送る |
-| AI 用 CLI | `src/cli/session-mail.ts` | ブリッジと同じ5操作を、コマンドで実行する（人の確認作業やデバッグ用） |
+| AI 用 CLI | `src/cli/session-mail.ts` | join・members・send・receive・leave の5つを、トークンファイルを使ってコマンドで実行する（人の確認作業やデバッグ用）。ルームの操作はない |
 | 管理用 CLI | `src/cli/admin.ts` | serve / provision / viewer-token / status / probe / export。AI のツールには出さない。ルームは作らない |
 | WebUI | `src/web/` | 閲覧専用の画面。上部でルームを選び、そのルームの参加者とメッセージを表示する（選んだルームはブラウザーに覚える）。本文は `textContent` だけで表示する |
 | 共通 | `src/shared/` | 設定、入力の検証、ID とトークン、AI に渡す文面、HTTP クライアント |
@@ -31,10 +31,10 @@
 - 宛先の ID・全員宛て・参加者の一覧・表示名の重複の判定は、ルームの中だけで行います。ルームをまたいだ送信はしません。
 - 1つのセッション（ブリッジ）が同時に入れるのは1つのルームだけです。会話の中から参加したブリッジは、`channel_leave` で退出すると参加していない状態に戻り（切断を伝え、キーを捨てる）、別のルームや別の ID に参加し直せます。
 - ルームの作成・一覧・削除は、MCP ツール（`channel_room_create`・`channel_rooms`・`channel_room_delete`）から、参加用キーで行います（`/api/join/rooms`）。参加していなくても使えます。
+- ルームの一覧には、ルームの ID・作成日時と、参加中（`joined`）の参加者の ID と表示名を返します（切断中も含め、退出済みと登録だけの参加者は含めません）。
 - 削除できるのは、参加中（`joined`）の参加者がいないときだけです（切断中も参加中に数え、登録だけの参加者は数えません）。断るときは `ROOM_NOT_EMPTY` です。削除すると、そのルームの参加者・トークン・メッセージ・配送・通知の状態を、外部キーの連動（`ON DELETE CASCADE`）ですべて消します。
 
-
-送信元は、ブローカーが発行した**参加者ごとのトークン**で決まります。AI が入力した値で送信元が決まることはありません。トークンの受け取り方は2通りあります。
+**参加**：送信元は、ブローカーが発行した**参加者ごとのトークン**で決まります。AI が入力した値で送信元が決まることはありません。トークンの受け取り方は2通りあります。
 
 | 方法 | 流れ | 使う場面 |
 |---|---|---|
@@ -65,7 +65,7 @@
 
 | 状態 | 値 | 意味・変わるとき |
 |---|---|---|
-| 参加（membership） | `provisioned` / `joined` / `left` | provision 直後は provisioned。join で joined。leave で left（未取得の配送は `cancelled_left` になり、再 join しても戻らない） |
+| 参加（membership） | `provisioned` / `joined` / `left` | provision 直後は provisioned。join で joined。leave で left（未取得の配送は `cancelled_left` になり、再 join しても戻らない）。退出した ID には、同じルームで誰でも参加し直せる |
 | 接続（connection） | `online` / `offline` | ブリッジのハートビート（5 秒ごと）が 30 秒以内にあれば online。**メモリで管理**し、ブローカーを再起動すると全員 offline から始まる |
 | 自動受信（receiver_state） | `unverified` / `verified` / `failing` / `not_configured` | 通知を出した後に、同じ接続の世代で `channel_receive` が呼ばれたら verified。新しい世代で接続すると unverified に戻る。通知の失敗が3回続くと failing |
 | 作業（activity_state） | `unknown` / `awaiting_approval` / `interrupted` | API（`POST /api/agent/activity`）はあるが、**それを呼ぶ Hooks 連携は未実装**。今は常に unknown |
@@ -76,7 +76,7 @@
 ## 4. メッセージ
 
 - **送信**（`Core.send`）
-  - **宛先**：`to` は固定 ID か `"all"` です。全員送信の宛先は、**送信した時点の joined の参加者から自分を除いた全員**で、その場で確定します。後から参加した人には届きません。
+  - **宛先**：`to` は同じルームの参加者の ID か `"all"` です。全員送信の宛先は、**送信した時点で、そのルームの joined の参加者から自分を除いた全員**で、その場で確定します。後から参加した人には届きません。
   - **重複の防止**：同じ送信者が同じ `client_message_id` で送った場合、内容が同じなら最初の結果を返します（`duplicate: true`）。内容が違えば `IDEMPOTENCY_CONFLICT` です。
   - **返信**：`reply_to` には、自分が送信者か宛先として関わったメッセージだけを指定できます。
   - **保存**：投稿と宛先ごとの配送は、1つのトランザクションで保存します（`PRAGMA synchronous = FULL`）。
@@ -86,7 +86,9 @@
   - 役割：1〜200 文字。改行は使えません。
   - 本文：1〜20,000 文字。
   - `client_message_id`：`[A-Za-z0-9._:-]{1,64}`。
-  - 固定 ID：`[a-z][a-z0-9-]{0,31}`。`all` は使えません。
+  - 参加者の ID：`[a-z][a-z0-9-]{0,31}`。`all` は使えません。
+  - ルームの ID：`[A-Za-z0-9._-]{1,32}`。大文字と小文字は区別します。
+  - HTTP の本文：JSON のオブジェクトだけを受け付けます（`null` や配列は 400）。
 
 ## 5. 通知（`src/broker/notifier.ts`）
 
@@ -130,6 +132,14 @@
 
 エラーの形は `{ "error": { "code", "message", "hint", "details" } }` です。
 
+## 6-2. WebUI（`src/web/`）
+
+- 素の JavaScript で、ビルドせずにそのまま配信します。
+- 右上でルームを選び、そのルームの参加者とメッセージを表示します。選んだルームはブラウザー（`localStorage`）に覚えます。ルームが1つもないときや、見ていたルームが削除されたときは、そう表示します。
+- 2 秒ごとに、ルームの一覧・参加者・メッセージの増分（`since_seq`）を取り直します。このとき、操作中の入力欄や選択欄は作り直しません。ルームや絞り込みを変えたあとに届いた、前の条件の応答は捨てます。ログイン画面の間は、取り直しを止めます。
+- 作成・削除などの操作はありません（閲覧専用）。
+- `export` で書き出した JSON を `window.__SM_SNAPSHOT__` に入れたページを作ると、その記録を表示できます（`demo/webui-demo.html`）。
+
 ## 7. セキュリティ
 
 - **Host の検証**
@@ -138,7 +148,7 @@
 - **Origin の検証**
   - AI・管理・参加の API：ブラウザーから来たもの（Origin ヘッダーがあるもの）は拒否します。
   - WebUI の API：自分のページのオリジンだけを認めます。POST では Origin を必須にします。
-- **WebUI のログイン**：viewer トークンが必要です。送信元ごとに失敗を数え、10 分で 10 回失敗したら 10 分間止めます。Cookie は HttpOnly、SameSite=Strict です。
+- **WebUI のログイン**：viewer トークンが必要です。送信元ごとに失敗を数え、10 分で 10 回失敗したら 10 分間止めます。Cookie は HttpOnly、SameSite=Strict で、7 日間有効です。ログアウトすると、サーバー側でもそのセッションを無効にします。ルームは閲覧の境目ではなく、ログインすれば全ルームを見られます。
 - **WebUI の表示**：CSP で外部のスクリプトを禁止し、本文は `textContent` だけで表示します（自動試験で `innerHTML` を使っていないことを確認しています）。
 - **秘密の保存**：トークンは SHA-256 のハッシュだけを DB に保存します。トークンファイルは 0600 で作ります。ログに本文とトークンは書きません。
 - **前提と限界**
@@ -159,7 +169,7 @@
 ```text
 config.json          設定（なければ既定値）
 session-mail-v2.db   SQLite（WAL）。ルームを入れた版から新しいファイル。前の版の session-mail.db は読まずに残す
-broker.lock          多重起動の防止（pid）
+broker.lock          多重起動の防止（pid。pid が生きていて、しかもポートが応答するときだけ「稼働中」とみなす）
 tokens/admin.token   管理用（serve が初回、または新しい DB を作ったときに作る）
 tokens/viewer.token  WebUI のログイン用（serve が初回、または新しい DB を作ったときに作る）
 tokens/join.key      会話の中から参加するときの参加用キー（serve が初回に作る）
@@ -185,4 +195,4 @@ logs/broker.log      ブローカーのログ
 
 ## 9. 試験
 
-`npm test` で、ビルドしてから `test/main.test.mjs` の 26 件を実行します。最後の1件は、`docs/MCP_TOOLS.md` が実際のツールと必須の引数をすべて説明しているかを確かめます。一時フォルダーでブローカーを起動し、HTTP と MCP（stdio）から仕様の規則を確かめます。本物の `codex` の代わりに、受け取った引数を記録するだけの `test/fake-codex.mjs` を使います。
+`npm test` で、ビルドしてから `test/main.test.mjs` の 26 件を実行します。最初に1つのブローカーを起動し、試験どうしでそのデータを使い回すので、試験の順番に意味があります。最後の1件は、`docs/MCP_TOOLS.md` が実際のツールと必須の引数をすべて説明しているかを確かめます。一時フォルダーでブローカーを起動し、HTTP と MCP（stdio）から仕様の規則を確かめます。本物の `codex` の代わりに、受け取った引数を記録するだけの `test/fake-codex.mjs` を使います。

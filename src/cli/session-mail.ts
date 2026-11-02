@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// AI・人向けの最小 CLI（DESIGN §6.4）。MCP と同じ API を呼ぶ。公開するのは5操作だけ
+// AI・人向けの最小 CLI（session-mail）。MCP と同じ API を呼ぶ。公開するのは5操作だけ
 import { readFileSync } from 'node:fs';
 import { readTokenFile } from '../shared/config.js';
 import { call } from '../shared/client.js';
