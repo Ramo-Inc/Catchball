@@ -50,4 +50,6 @@ Catchball は、Codex CLI と Claude Code のセッションを、ルームご�
 | 役割の ID と担当の入れ替え（D-017） | [role-id-takeover-decisions.md](design/role-id-takeover-decisions.md) | [role-id-takeover.md](design/role-id-takeover.md) |
 | ルーム（D-018） | [rooms-decisions.md](design/rooms-decisions.md) | [rooms.md](design/rooms.md) |
 
+リポジトリ直下の README には、英語版（[README.en.md](../README.en.md)）もあります。内容を変えたら、両方を直してください。
+
 リポジトリ直下の `poc/` は、受信経路を検証したときの最小実装です。`demo/` は、ルームを入れる前の版のデモの記録です。どちらも履歴として残しているだけで、本体からは使っていません。
