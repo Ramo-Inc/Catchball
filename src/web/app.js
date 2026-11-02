@@ -1,4 +1,4 @@
-// session-mail WebUI（仕様書 §4）。本文は textContent でだけ表示し、HTML として扱わない。
+// session-mail WebUI（閲覧専用）。本文は textContent でだけ表示し、HTML として扱わない。
 // window.__SM_SNAPSHOT__ があれば、その記録を表示する（公開用の読み取り専用ページ）
 (() => {
   'use strict';

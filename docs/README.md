@@ -1,15 +1,15 @@
 # Catchball ドキュメント
 
-Catchball は、Codex CLI と Claude Code のセッションをつなぐ、AI エージェント間のメッセージバスです。現在のバージョンは **v1.0.0-alpha.1**（2026-10-31）です。
+Catchball は、Codex CLI と Claude Code のセッションを、ルームごとにつなぐ AI エージェント間のメッセージバスです。最後に付けたバージョンは **v1.0.0-alpha.1**（2026-10-31）で、その後の変更（ルーム、役割の ID、担当の入れ替えなど）は `main` に入っています（[CHANGELOG](../CHANGELOG.md) の「未リリース」）。この `docs/` の現行の文書は、`main` の今のコードに合わせてあります。
 
 ## 新しく作業を始める人・AI セッションへ
 
 次の順で読んでください。上にあるものほど優先します。
 
 0. **session_mail を使うだけなら** [MCP_TOOLS.md](MCP_TOOLS.md) の1枚で足ります（ツールの使い方・通知への反応・本文の書き方・エラー）
-1. [`/AGENTS.md`](../AGENTS.md)：このリポジトリで作業するときの決まり（ビルド、試験、書き方、PR の流れ）
-2. [ARCHITECTURE.md](ARCHITECTURE.md)：今の作りの全体像（構成、状態、API、通知、セキュリティ、設定）
-3. [OPERATIONS.md](OPERATIONS.md)：導入・起動・参加・日常運用・トラブルシューティング
+1. [`/AGENTS.md`](../AGENTS.md)：このリポジトリで作業するときの決まり（ビルド、試験、書き方、プルリクエストの流れ）
+2. [ARCHITECTURE.md](ARCHITECTURE.md)：今の作りの全体像（ルームと参加、状態、通知、API、セキュリティ、データと設定）
+3. [OPERATIONS.md](OPERATIONS.md)：導入・起動・ルームの運用・担当の入れ替え・日常の操作・トラブルシューティング
 4. [REQUIREMENTS.md](REQUIREMENTS.md)：仕様書の要件ごとの達成状況と、仕様書から変えた点
 5. [DECISIONS.md](DECISIONS.md)：これまでの設計判断とその理由
 6. [ROADMAP.md](ROADMAP.md)：未実施の作業、既知の問題、次に検討していること
@@ -37,10 +37,17 @@ Catchball は、Codex CLI と Claude Code のセッションをつなぐ、AI �
 | [REQUIREMENTS.md](REQUIREMENTS.md) | 現行 | 要件の達成状況・仕様書からの変更点 |
 | [DECISIONS.md](DECISIONS.md) | 現行 | 設計判断の記録 |
 | [ROADMAP.md](ROADMAP.md) | 現行 | 今後の作業・既知の問題 |
-| [design/](design/) | 計画 | これから実装する機能の仕様と実装プラン（状態を各文書の先頭に書く）。[role-id-takeover.md](design/role-id-takeover.md)（役割の ID と担当の入れ替え、実装済み）、[rooms.md](design/rooms.md)（ルーム、実装済み） |
+| [design/](design/) | 記録 | 機能ごとの「ユーザーとの決定事項」と「実装前に書いた仕様書」。どちらも**実装済み**。決定事項は今も有効だが、仕様書の「今の作りは〜」は実装前の状態を指す。今の動きは上の現行の文書で確かめる |
+| [verification/](verification/) | 記録 | PoC とデモの検証記録・証跡。**記録した時点の版**（ルームも役割の ID もなく、ACK の操作があったころ）のもので、今の手順ではない |
 | [spec/](spec/) | 入力 | ユーザーが作成した元の仕様書（MVP 1.4）。**書き換えない** |
-| [verification/](verification/) | 記録 | PoC とデモの検証記録・証跡 |
-| [archive/](archive/) | 履歴 | 初期の設計書・実装計画・運用手順・レビュー・PoC の手順書。**今の実装とは異なる箇所がある**ので、経緯の確認にだけ使う |
-| [images/](images/) | 画像 | README で使う WebUI のスクリーンショット |
+| [archive/](archive/) | 履歴 | 初期の設計書・実装計画・運用手順・レビュー・PoC の手順書。**今の実装とは大きく異なる**ので、経緯の確認にだけ使う。作業の根拠にしない |
+| [images/](images/) | 画像 | README で使う WebUI のスクリーンショット（今の画面） |
 
-リポジトリ直下の `poc/` は、受信経路を検証したときの最小実装です。履歴として残しているだけで、本体からは使っていません。
+**design/ の中身**
+
+| 機能 | 決定事項（今も有効） | 実装前の仕様書（記録） |
+|---|---|---|
+| 役割の ID と担当の入れ替え（D-017） | [role-id-takeover-decisions.md](design/role-id-takeover-decisions.md) | [role-id-takeover.md](design/role-id-takeover.md) |
+| ルーム（D-018） | [rooms-decisions.md](design/rooms-decisions.md) | [rooms.md](design/rooms.md) |
+
+リポジトリ直下の `poc/` は、受信経路を検証したときの最小実装です。`demo/` は、ルームを入れる前の版のデモの記録です。どちらも履歴として残しているだけで、本体からは使っていません。

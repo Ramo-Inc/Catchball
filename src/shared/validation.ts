@@ -1,4 +1,4 @@
-// 入力の検証と正規化（DESIGN §3.2）
+// 入力の検証と正規化（表示名・役割・本文・ID・ルームの ID など）
 export class ApiError extends Error {
   constructor(public code: string, public status: number, message: string, public hint?: string, public details?: unknown) {
     super(message);

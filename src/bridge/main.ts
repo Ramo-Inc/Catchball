@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// MCP ブリッジ（DESIGN §6）：Codex / Claude が stdio で起動する、普通の MCP サーバー。
+// MCP ブリッジ：Codex / Claude が stdio で起動する、普通の MCP サーバー。
 // 参加のしかたは2通り：
-//   1. 会話の中で channel_join を呼ぶ（通常）。この PC のデータフォルダーにある参加用キーで認証し、固定 ID を割り当ててもらう
-//   2. 環境変数 SESSION_MAIL_TOKEN_FILE でトークンファイルを渡して起動する（従来の方法）
+//   1. 会話の中で channel_join を呼ぶ（通常）。この PC のデータフォルダーにある参加用キーで認証し、ユーザーが指定したルームと ID で参加する
+//   2. 環境変数 SESSION_MAIL_TOKEN_FILE でトークンファイル（provision で作る）を渡して起動する。ルームと ID はファイルで決まる
+// ルームの作成・削除・一覧のツールも、参加用キーで呼ぶ（参加していなくても使える）
 // Claude には claude/channel を宣言し、ハートビートの応答に載った通知を Channel 通知として送る。
 // claude/channel/permission は宣言しない（承認をメッセージで中継しない）。stdout は MCP 専用、ログは stderr。
 import { existsSync, readFileSync } from 'node:fs';

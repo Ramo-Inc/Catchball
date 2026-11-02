@@ -1,4 +1,4 @@
-// データディレクトリ、設定、トークンファイル（DESIGN §3.5、§8）
+// データフォルダー、設定（config.json）、トークンファイル
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -30,7 +30,7 @@ export interface Config {
     debounce_ms: number;
     claude_renotify_backoff_ms: number[];
     retry_after_failure_ms: number[];        // 通知に失敗したあと、送り直すまでの間隔（失敗が続くたびに次の値へ。最後の値で止まる）
-    codex_quiet_after_tool_ms: number;      // PoC R2：直前にツールを使っていた Codex には少し待ってから通知する
+    codex_quiet_after_tool_ms: number;      // 直前にツールを使っていた Codex には少し待ってから通知する
     attention_after_ms: number;
     failing_after_consecutive_failures: number;
   };

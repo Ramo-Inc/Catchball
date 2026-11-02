@@ -1,6 +1,6 @@
 # Catchball で作業する AI・開発者へ
 
-Catchball は、Codex CLI と Claude Code のセッションをつなぐ AI エージェント間のメッセージバスです（コード上の名前は `session-mail`、MCP サーバー名は `session_mail`）。現在のバージョンは **v1.0.0-alpha.1** です。
+Catchball は、Codex CLI と Claude Code のセッションをつなぐ AI エージェント間のメッセージバスです（コード上の名前は `session-mail`、MCP サーバー名は `session_mail`）。最後に付けたバージョンは **v1.0.0-alpha.1** で、その後の変更（ルーム、役割の ID など）は `main` に入っています（CHANGELOG の「未リリース」）。
 
 ## まず読むもの
 
