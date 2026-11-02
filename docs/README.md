@@ -49,7 +49,7 @@ Catchball は、Codex CLI と Claude Code のセッションを、ルームご�
 |---|---|---|
 | 役割の ID と担当の入れ替え（D-017） | [role-id-takeover-decisions.md](design/role-id-takeover-decisions.md) | [role-id-takeover.md](design/role-id-takeover.md) |
 | ルーム（D-018） | [rooms-decisions.md](design/rooms-decisions.md) | [rooms.md](design/rooms.md) |
-| Pi の参加と自動受信（**未実装**） | 仕様書の「決めること」を確かめる前 | [pi-integration.md](design/pi-integration.md)（機能の仕様）・[pi-integration-design.md](design/pi-integration-design.md)（設計・調査・試作の結果） |
+| Pi の参加と自動受信（**未実装**） | 仕様書の中に含める | [pi-integration.md](design/pi-integration.md)（機能の仕様）・[pi-integration-design.md](design/pi-integration-design.md)（設計・調査・試作の結果） |
 
 リポジトリ直下の README には、英語版（[README.en.md](../README.en.md)）もあります。内容を変えたら、両方を直してください。
 
