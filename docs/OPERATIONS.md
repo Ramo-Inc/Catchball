@@ -70,13 +70,27 @@ claude --dangerously-load-development-channels server:session_mail
 
 各セッションに、役割と一緒に頼みます。
 
-> キャッチボールに参加して。ID は claude-1、表示名は「設計レビュアー」、役割は「API とコードの設計レビュー」。
+> キャッチボールに参加して。ID は review、表示名は「設計レビュアー」、役割は「API とコードの設計レビュー」。
 
-> キャッチボールに、統括として参加して。ID は codex-main、表示名は「統括」、役割は「ユーザーとの対話、仕事の振り分け、進捗管理、結果の取りまとめ」。
+> キャッチボールに、統括として参加して。ID は main、表示名は「統括」、役割は「ユーザーとの対話、仕事の振り分け、進捗管理、結果の取りまとめ」。
 
-- Codex は、自分の会話 ID（`$CODEX_THREAD_ID`）をシェルで調べて登録します。
+- Codex は、自分の会話 ID（`$CODEX_THREAD_ID`）をシェルで調べて登録します。会話 ID なしでは参加できません。
 - 参加の 8 秒後に自動受信の確認が届きます。WebUI で「自動受信 確認済み」になれば準備完了です。
-- ID を省略すると、`codex-1` のような ID が自動で割り当てられます。
+
+### ID の付け方
+
+- **ID は担当で付け、ハーネス（Codex か Claude か）では付けません。** 例：`main`（統括）、`dev`（開発）、`review`（レビュー）、`planning`（計画）。
+- ID は必ず指定します。ID を言わずに「参加して」と頼むと、AI は ID を尋ねてきます。
+- 宛先は ID で指定するので、担当の中身（Codex か Claude か）が替わっても、送る側は同じ ID に送り続けられます。
+- 以前の `codex-main` や `claude-1` のような ID も、そのまま使えます。
+
+### 担当を入れ替える（Codex ⇔ Claude Code）
+
+1. 引き継ぎが必要なら、前のセッションに状況（やったこと・残り・変えたファイル）をまとめさせます。引き継ぎはセッションどうしで行います。入れ替わったことは、ほかの参加者へ自動では知らせません。
+2. 前のセッションを閉じます。退出（leave）はさせません。退出すると、前の担当宛ての未取得のメッセージが配送停止になるためです。
+3. 前のセッションが「切断中」になってから、新しいセッションに「キャッチボールに、ID は dev で参加して」と頼みます。前の担当宛ての未取得のメッセージは、新しいセッションがそのまま受け取ります。
+   - Claude は、閉じればすぐ切断中になります。
+   - Codex は、閉じても（`/new` で新しい会話にしても）前の会話が1〜2分「接続中」のまま残ります（§7-2）。
 
 ### トークンファイルで参加させる方法（従来の方法）
 
@@ -118,14 +132,24 @@ node dist/cli/admin.js provision --agent claude-1 --provider claude --conversati
 |---|---|
 | AI が「session_mail のツールがない」と言う | MCP は**起動したときにしか読み込まれません**。登録より前に起動したセッションは、一度だけ再起動します（会話は引き継げます：Codex は `codex resume --last`、Claude は `claude --continue --dangerously-load-development-channels server:session_mail`）。Claude で `.mcp.json` を使う場合は、確認画面で「使わない」を選んでいないか確認してください（`.claude/settings.local.json` の `disabledMcpjsonServers`） |
 | 参加すると「ブローカーが起動していません」 | `serve` を起動していないか、データフォルダーが違います（Codex は §2 の `SESSION_MAIL_HOME` を確認） |
-| `AGENT_IN_USE` | その ID は別のセッションが接続中です。別の ID を使うか、そのセッションを終了してから参加し直します |
-| Codex が「自動受信は未準備」 | 会話 ID なしで参加しています。「`$CODEX_THREAD_ID` を conversation_id に入れて、もう一度 channel_join して」と頼みます |
+| `AGENT_IN_USE` | その ID は別のセッションが接続中です。別の ID は使わず、前のセッションを終了させてから参加し直します（§7-2） |
 | 「自動受信 失敗（要確認）」 | `status` の通知エラーを見ます。`codex` が見つからない場合は、`config.json` の `codex.command` に codex の実体のフルパスを書きます（Windows の npm 版は `.cmd` を直接起動できません） |
 | Codex がメッセージに反応しない | Esc で作業を中断した直後の Codex は、届いた通知を自動では処理しません。何か入力すると、そのターンの後で処理されます |
 | Claude がメッセージに反応しない | `--dangerously-load-development-channels server:session_mail` を付けて起動したか、起動時に Channel の行が表示されたかを確認します。組織のアカウントで「blocked by org policy」と出る場合は、管理者に Channels の有効化を頼んでください |
 | 承認を求める画面が毎回出る | §2 のツールの承認設定（Codex の `default_tools_approval_mode`、Claude の `permissions.allow`）を確認します |
 | 別の PC から WebUI が開けない | ファイアウォール、`ui.lan`、開いている名前（IP アドレスか PC 名。それ以外は `ui.allowed_hosts` に追加）を確認します |
 | Claude から Claude を起動して試すと動きがおかしい | 親のセッションの環境変数（`CLAUDE_CODE_SESSION_ID` など）を引き継ぐと、親のセッションと混ざります。`env -i` などで外して起動します |
+
+## 7-2. 異常検知と異常処理
+
+| 異常 | 気づき方 | 対処 |
+|---|---|---|
+| 前のセッションが「接続中」のまま残った | 参加すると `AGENT_IN_USE`。WebUI でその ID が接続中のまま、応答が返ってこない | 前のセッションを終了させます（ウィンドウを閉じる・プロセスを止める）。AI が固まっていても、プロセスが生きていれば接続中のままです。Claude は閉じればすぐ切断になります。**Codex は閉じても（`/new` でも）前の会話の MCP サーバーが1〜2分残る**ので、1〜2分待ってから参加します。`codex app-server daemon stop` でもすぐに切れますが、動いているすべての Codex のセッションが止まるので、ほかに Codex のセッションがあるときは使いません |
+| ブローカーだけが再起動した | WebUI が一時的に開けない | 何もしなくてかまいません。各セッションは 5 秒ごとに再接続を試み、未取得があれば通知し直します |
+| 停電などで PC ごと落ちた | すべて止まる | ブローカーを起動 → AI のセッションを再開（Codex は `codex resume --last`、Claude は `claude --continue --dangerously-load-development-channels server:session_mail`）→ **同じ ID で**参加し直します。未取得のメッセージは、そのまま受け取れます |
+| 止まっている間の送信がエラーになった | `BROKER_UNAVAILABLE` | ブローカーの復旧後に、同じ `client_message_id` で送り直します（二重に投稿されません） |
+
+その他の症状は §7 を見てください。
 
 ## 8. AI に渡している運用指示
 

@@ -30,20 +30,21 @@
 ### channel_join：参加する
 
 ```json
-{ "display_name": "設計レビュアー", "role": "API とコードの設計レビュー", "agent_id": "claude-1" }
+{ "agent_id": "review", "display_name": "設計レビュアー", "role": "API とコードの設計レビュー" }
 ```
 
 | 引数 | 内容 |
 |---|---|
 | `display_name` | 表示名（1〜40文字）。参加中の人と同じ名前は使えない（英字の大文字・小文字の違いも同じ扱い） |
 | `role` | 担当内容（1〜200文字、改行不可）。「何を担当し、どんな依頼を受けるか」を書く |
-| `agent_id` | 固定 ID（英小文字・数字・ハイフン。例 `codex-main`、`claude-1`）。ユーザーに指定されたものを使う。省略すると自動で割り当てる |
-| `conversation_id` | **Codex は必須**：シェルで `echo $CODEX_THREAD_ID`（PowerShell は `$env:CODEX_THREAD_ID`）を実行した値。Claude は不要 |
+| `agent_id` | **必須**：役割の ID（英小文字・数字・ハイフン。例 `main`、`dev`、`review`、`planning`）。ユーザーに指定されたものを使う。**指定されていなければ、自分で決めずにユーザーに尋ねる**（トークンファイルで起動したセッションでは省略できる） |
+| `conversation_id` | **Codex は必須**（ないと断られる）：シェルで `echo $CODEX_THREAD_ID`（PowerShell は `$env:CODEX_THREAD_ID`）を実行した値。Claude は不要 |
 | `coordinator` | 統括（ユーザーと対話し、仕事を振り分ける役）として参加するなら `true` |
 
 - 返り値の `guide` には、役割に応じた運用指示（統括用か担当用）が入っています。**必ず読んで従ってください。**
 - 参加の数秒後に「[session-mail 接続確認]」が届きます。`channel_receive` を1回呼べば十分です。
-- 参加済みの状態でもう一度呼ぶと、自分の表示名と役割だけが更新されます。
+- 参加済みの状態でもう一度呼ぶと、自分の表示名と役割だけが更新されます。違う `agent_id` を指定すると断られます（ID を変えるには、セッションを起動し直す）。
+- ID は担当を表します。Codex か Claude かは関係ありません。前の担当のセッションがいなければ（切断中・退出済み）、どちらのハーネスからでも同じ ID で参加でき、前の担当宛ての未取得のメッセージをそのまま受け取れます。
 
 ### channel_members：参加者を見る
 
@@ -61,11 +62,11 @@
 ### channel_send：送る
 
 ```json
-{ "to": "claude-1", "body": "[依頼 T-01] API 設計のレビュー\n対象：src/broker/http.ts\n受入条件：重大な指摘の有無を報告", "client_message_id": "codex-main-T01-req-1" }
+{ "to": "review", "body": "[依頼 T-01] API 設計のレビュー\n対象：src/broker/http.ts\n受入条件：重大な指摘の有無を報告", "client_message_id": "main-T01-req-1" }
 ```
 
 ```json
-{ "to": "codex-main", "body": "[受領 T-01] 着手します。30分ほどで報告します。", "client_message_id": "claude-1-T01-ack-1", "reply_to": "m_01M68AZW4PQDNKYF9P8V8C3XBC" }
+{ "to": "main", "body": "[受領 T-01] 着手します。30分ほどで報告します。", "client_message_id": "review-T01-ack-1", "reply_to": "m_01M68AZW4PQDNKYF9P8V8C3XBC" }
 ```
 
 | 引数 | 内容 |
@@ -142,12 +143,12 @@
 | `NOT_JOINED` | まだ参加していない | `channel_join` を呼ぶ |
 | `BROKER_NOT_READY` / `BROKER_UNAVAILABLE` | ブローカーが起動していない | ユーザーに起動を頼む。送信は受理されていないので、後で同じ `client_message_id` で再送する |
 | `NAME_TAKEN` | 表示名が他の人と同じ | 別の表示名で `channel_join` |
-| `AGENT_IN_USE` | その ID は別のセッションが接続中 | 別の `agent_id` を使う |
+| `AGENT_IN_USE` | その ID は別のセッションが接続中 | **別の ID は使わない。** ユーザーに伝えて、前のセッションが終了したか確認してもらう |
 | `UNKNOWN_RECIPIENT` / `RECIPIENT_NOT_JOINED` | 宛先がいない・参加していない | `channel_members` で ID と状態を確かめる |
 | `SELF_SEND` / `NO_RECIPIENTS` | 自分宛て／全員宛ての相手がいない | 宛先を見直す |
 | `INVALID_REPLY_TO` | 返信先が、自分の関わっていないメッセージ | 自分が受け取った・送った `message_id` を使う |
 | `IDEMPOTENCY_CONFLICT` | 同じ `client_message_id` を、別の内容で使った | 新しい `client_message_id` で送る |
-| `INVALID_ARGUMENT` / `PAYLOAD_TOO_LARGE` | 引数の形が違う・長すぎる | `message` を見て直す。長い本文は分ける |
+| `INVALID_ARGUMENT` / `PAYLOAD_TOO_LARGE` | 引数の形が違う・長すぎる・足りない（参加の ID や Codex の会話 ID がないなど） | `message` と `hint` を見て直す。参加の ID が分からなければユーザーに尋ねる。長い本文は分ける |
 | `UNAUTHENTICATED` | 認証に失敗した | ユーザーに接続設定の確認を頼む |
 
 ## 7. 守ること
