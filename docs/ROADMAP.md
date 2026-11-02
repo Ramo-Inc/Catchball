@@ -19,7 +19,7 @@
 | F-2 | 別の PC のセッションの参加 | ブリッジが自分の PC で `codex queue` を実行する形にすれば、Codex も含めて別の PC から参加できる。ブローカーへの接続は SSH のトンネル（`ssh -L 47821:127.0.0.1:47821`）が安全 |
 | F-3 | Claude の通知の遅れを短くする | 今は、ハートビート（5 秒ごと）を待つので最大で 5 秒遅れる。long-poll にすれば短くできる |
 | F-4 | ルームの退出済みの記録の扱い | 退出で配送を止めたメッセージは、ルームを削除するまで WebUI に「× 退出で配送停止」として残る。ユーザーの元の言葉は「削除」だったので、記録も消す必要があればユーザーに確認して直す（[design/role-id-takeover-decisions.md](design/role-id-takeover-decisions.md) の 10 の補足） |
-| F-5 | Pi（pi-coding-agent）の参加と自動受信 | Pi 用の拡張機能を同梱し、ブリッジの通知をこの PC の中だけの受け口から会話に入れる（`pi.sendMessage`）。退出・削除の前に確認画面を出す。変えるのはブリッジと拡張機能だけで、ブローカーの中では Claude と同じ種類として扱う（WebUI の種類の表示は「Claude」のまま）。今は、回避策（mcp.json で `SESSION_MAIL_PROVIDER=claude`）で手動受信だけできる。仕様は [design/pi-integration.md](design/pi-integration.md)、設計は [design/pi-integration-design.md](design/pi-integration-design.md) |
+| F-5 | Pi（pi-coding-agent）の参加と自動受信 | Codex・Claude と同じ機能・同じ使い方にする。ユーザーは mcp.json に session_mail を登録し、通知を受け取るだけの Pi 拡張機能を入れる（Claude の起動時の引数に当たる）。ブリッジは接続名 `pi` を Claude と同じ扱いにし、通知を拡張機能の受け口（Pi のプロセス番号で決まる場所）に書く。ブローカーは変えない（WebUI の種類の表示は「Claude」のまま）。今は、回避策（mcp.json で `SESSION_MAIL_PROVIDER=claude`）で手動受信だけできる。仕様は [design/pi-integration.md](design/pi-integration.md)、設計は [design/pi-integration-design.md](design/pi-integration-design.md) |
 
 ## 3. 既知の問題
 
