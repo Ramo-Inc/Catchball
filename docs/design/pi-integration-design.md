@@ -1,8 +1,8 @@
 # 設計：Pi（pi-coding-agent）の参加と自動受信
 
-> **この文書は実装前に書いた設計書です。** 何をするかは [pi-integration.md](pi-integration.md)（仕様書）にあります。この文書には、どう作るかと、その根拠になった調査・試作をまとめます。文中の「今の作り」は、2026-11-02 の `main` を指します。
+> **この文書は実装前に書いた設計書で、記録として残しています。** 今の動きは [ARCHITECTURE](../ARCHITECTURE.md)・[OPERATIONS](../OPERATIONS.md) で確かめてください。 何をするかは [pi-integration.md](pi-integration.md)（仕様書）にあります。この文書には、どう作るかと、その根拠になった調査・試作をまとめます。文中の「今の作り」は、2026-11-02 の `main` を指します。
 
-- 状態：**未実装**（調査・実物での試験・試作まで済み）
+- 状態：**実装済み**（2026-11-02。D-020。実物の Pi で確認：[verification/pi-20261102.md](../verification/pi-20261102.md)）
 - 対象の Pi：`@earendil-works/pi-coding-agent` 1.5.0（`earendil-works/pi`。コミット ff2c893 を読んだ）
 - 方針：**Codex・Claude Code とまったく同じ機能・同じ使い方にする。** 変えるのは、ブリッジの2か所と、通知を受け取るだけの Pi 拡張機能
 

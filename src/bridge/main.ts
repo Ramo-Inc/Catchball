@@ -5,8 +5,11 @@
 //   2. 環境変数 SESSION_MAIL_TOKEN_FILE でトークンファイル（provision で作る）を渡して起動する。ルームと ID はファイルで決まる
 // ルームの作成・削除・一覧のツールも、参加用キーで呼ぶ（参加していなくても使える）
 // Claude には claude/channel を宣言し、ハートビートの応答に載った通知を Channel 通知として送る。
+// Pi は Claude と同じ扱いで参加し、通知は Channel の代わりに、Catchball の Pi 拡張機能の受け口（Pi のプロセス番号で決まる場所）に書く。
 // claude/channel/permission は宣言しない（承認をメッセージで中継しない）。stdout は MCP 専用、ログは stderr。
 import { existsSync, readFileSync } from 'node:fs';
+import { createConnection } from 'node:net';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -34,12 +37,28 @@ const server = new McpServer(
   },
 );
 
-// 接続してきたのが Claude か Codex か（環境変数で上書きできる）
+// 接続してきたのが Pi か（Pi は MCP の接続で pi と名乗る）
+const isPi = () => server.server.getClientVersion()?.name === 'pi';
+
+// 接続してきたのが Claude か Codex か（環境変数で上書きできる）。Pi は Claude と同じ扱い
 function provider(): Provider {
   if (bound) return bound.provider;
   const env = process.env.SESSION_MAIL_PROVIDER;
   if (env === 'claude' || env === 'codex') return env;
-  return /claude/i.test(server.server.getClientVersion()?.name ?? '') ? 'claude' : 'codex';
+  return isPi() || /claude/i.test(server.server.getClientVersion()?.name ?? '') ? 'claude' : 'codex';
+}
+
+// Pi の拡張機能の受け口。Pi はブリッジを直接起動するので、親のプロセス番号が Pi 本体の番号になる（拡張機能と同じ決め方）
+const piSocketPath = (pid: number) => process.platform === 'win32' ? `\\\\.\\pipe\\catchball-pi-${pid}` : join(tmpdir(), `catchball-pi-${pid}.sock`);
+
+// 通知文を受け口に1行書く。つながらない・書けないときは例外
+function writeToPi(content: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const sock = createConnection(piSocketPath(process.ppid));
+    sock.setTimeout(3000, () => sock.destroy(new Error('Pi の拡張機能の受け口が応答しません')));
+    sock.on('error', e => reject(new Error(`Pi の拡張機能の受け口に書けません（拡張機能が入っているか確認してください）: ${(e as NodeJS.ErrnoException).code ?? e.message}`)));
+    sock.on('connect', () => sock.end(JSON.stringify({ content }) + '\n', () => resolve()));
+  });
 }
 
 function brokerUrl(): string {
@@ -251,7 +270,8 @@ async function beatOnce(): Promise<void> {
     const n = r.data.notify;
     if (n && b.provider === 'claude') {
       try {
-        await server.server.notification({ method: 'notifications/claude/channel', params: { content: n.content, meta: n.meta } });
+        if (isPi()) await writeToPi(n.content);
+        else await server.server.notification({ method: 'notifications/claude/channel', params: { content: n.content, meta: n.meta } });
         results.push({ notify_id: n.notify_id, result: 'written' });
       } catch (e) {
         results.push({ notify_id: n.notify_id, result: 'error', error: (e as Error).message });

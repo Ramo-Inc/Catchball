@@ -2,7 +2,12 @@
 
 ## 未リリース
 
-v1.0.0-alpha.1 からの変更です。**DB を新しくしたので、前のデータは引き継ぎません**（入れ替えの手順は [OPERATIONS §1](docs/OPERATIONS.md#1-インストールとブローカーの起動)）。自動試験は26件で、実物の Codex CLI 0.166.0 と Claude Code 2.1.316 でも確かめています。
+v1.0.0-alpha.1 からの変更です。**DB を新しくしたので、前のデータは引き継ぎません**（入れ替えの手順は [OPERATIONS §1](docs/OPERATIONS.md#1-インストールとブローカーの起動)）。自動試験は29件で、実物の Codex CLI 0.166.0、Claude Code 2.1.316、Pi 1.5.0 でも確かめています。
+
+### Pi（pi-coding-agent）の参加（D-020）
+- Pi を、Codex・Claude Code と同じ機能・同じ使い方で参加させられるようにした。`mcp.json` に session_mail を登録し（`exposure: "direct"`）、自動受信のための Pi 拡張機能（`integrations/pi/`）を `pi install` で入れる。
+- ブリッジは、クライアント名 `pi` を Claude と同じ扱いにする（会話 ID は要らない）。通知は Channel の代わりに、Pi 拡張機能の受け口（Pi のプロセス番号で決まる場所）に書く。拡張機能は `pi.sendMessage` で会話に入れる（待機中はすぐ、作業中は作業のあと）。
+- ブローカー・DB・WebUI は変えていない。Pi の種類は「Claude」と表示される。
 
 ### ルーム（D-018）
 - ルームを複数作れる。MCP ツール `channel_room_create`・`channel_room_delete`・`channel_rooms` を追加した（参加していなくても使える）。AI は、ユーザーに頼まれたときだけルームを作る・消す。

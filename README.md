@@ -2,7 +2,7 @@
 
 **日本語** | [English](README.en.md)
 
-**Codex と Claude Code のセッションをつなぐ、AI エージェント間のメッセージバス。**
+**Codex・Claude Code・Pi のセッションをつなぐ、AI エージェント間のメッセージバス。**
 同じ PC で動いている複数の AI セッションが、**ルーム**の中で、相手を指定して（または全員へ）メッセージを送り合えます。人はそのやり取りを WebUI で見守ります。
 
 ![WebUI：ルーム review-1 で、統括（Codex）が2人のレビュアー（Claude）にコードレビューを依頼したところ](docs/images/overview.png)
@@ -25,7 +25,7 @@ flowchart LR
     direction LR
     A["Codex セッション"]
     B["Claude Code セッション"]
-    C["Codex / Claude …"]
+    C["Pi / Codex / Claude …"]
     BR["Catchball ブローカー<br/>（ルーム・受信箱・配送・通知）"]
     A <-- "MCP" --> BR
     B <-- "MCP" --> BR
@@ -39,7 +39,7 @@ flowchart LR
 - **AI からの使い方**：各セッションに、ふつうの **MCP サーバー**として `session_mail` を登録します。AI からは8つのツールとして見えます。
   - 参加と送受信：`channel_join` / `channel_members` / `channel_send` / `channel_receive` / `channel_leave`
   - ルーム：`channel_rooms` / `channel_room_create` / `channel_room_delete`
-- **届いたことの知らせ方**：Codex には `codex queue`、Claude には Channel 機能で知らせます。知らせには本文を入れません。知らせを受けた AI が、`channel_receive` で本文を取りに来ます（取った時点で既読）。
+- **届いたことの知らせ方**：Codex には `codex queue`、Claude には Channel 機能、Pi には Catchball の Pi 拡張機能で知らせます。知らせには本文を入れません。知らせを受けた AI が、`channel_receive` で本文を取りに来ます（取った時点で既読）。
 - **安全のための作り**：送信元はブローカーが発行したトークンで決まり、AI が他人を名乗ることはできません。AI 用・管理用の API はこの PC の中（127.0.0.1）だけで使えます。WebUI は閲覧専用で、ログインが必要です。
 
 ## 使い方の例
@@ -78,7 +78,7 @@ flowchart LR
 
 ## はじめかた
 
-必要なもの：Node.js 22.13 以上、Codex CLI 0.166.0 以上、Claude Code（claude.ai か Console の API キーでログイン）
+必要なもの：Node.js 22.13 以上と、使う AI（Codex CLI 0.166.0 以上、Claude Code（claude.ai か Console の API キーでログイン）、Pi（pi-coding-agent）1.5.0 以上のどれか）
 
 ### 1. インストールしてブローカーを起動する
 
@@ -123,6 +123,18 @@ claude mcp add --scope user session_mail -- node <Catchball>/dist/bridge/main.js
 "mcp__session_mail__channel_receive", "mcp__session_mail__channel_rooms", "mcp__session_mail__channel_room_create"
 ```
 
+**Pi**：`~/.pi/agent/mcp.json` に次を書き、自動受信のための拡張機能を入れます。
+
+```json
+{ "mcpServers": { "session_mail": { "command": "node", "args": ["<Catchball>/dist/bridge/main.js"], "exposure": "direct" } } }
+```
+
+```bash
+pi install <Catchball>/integrations/pi
+```
+
+`exposure: "direct"` は、ツールをモデルに直接見せるための設定です。Node のバージョン管理の道具（Volta など）を使っている場合は、`command` に node の実体の絶対パスを書きます（[OPERATIONS §2](docs/OPERATIONS.md#2-mcp-サーバーとして登録する最初に1回だけ)）。
+
 ### 3. プロジェクトのフォルダーで AI を起動する
 
 ```bash
@@ -136,6 +148,13 @@ claude --dangerously-load-development-channels server:session_mail
 ```
 
 Claude の引数は、メッセージが届いたときに自動で動き出すために必要です。起動のたびに確認画面が出るので「I am using this for local development」を選びます。
+
+```bash
+cd <プロジェクトのフォルダー>
+pi
+```
+
+Pi は、拡張機能を入れていれば引数なしで自動受信します。`/new` などでセッションを切り替えると参加が外れるので、同じルーム・同じ ID で参加し直すよう頼みます。
 
 ### 4. ルームを作り、「参加して」と頼む
 
@@ -152,7 +171,7 @@ Claude の引数は、メッセージが届いたときに自動で動き出す�
 > キャッチボールのルーム proj-a に、統括として参加して。ID は main、表示名は「統括」、役割は「ユーザーとの対話、仕事の振り分け、進捗管理、結果の取りまとめ」。
 
 - ルームや ID を言わずに頼むと、AI は自分で決めずに尋ねてきます。ないルームを言うと、勝手に作らずに尋ねてきます。
-- ID は担当で付けます（例：`main`・`dev`・`review`）。前のセッションがいなければ、Codex と Claude Code の間で同じ ID に入れ替えられます。
+- ID は担当で付けます（例：`main`・`dev`・`review`）。前のセッションがいなければ、Codex・Claude Code・Pi の間で同じ ID に入れ替えられます。
 - 参加すると、自動受信の確認が自動で行われます。WebUI に「自動受信 確認済み」と出れば準備完了です。
 - ルームの移り方・片付け方、担当の入れ替え方は [OPERATIONS](docs/OPERATIONS.md) にあります。AI に詳しい使い方を教えたいときは、「docs/MCP_TOOLS.md を読んで」と伝えてください。
 
@@ -166,15 +185,16 @@ Claude の引数は、メッセージが届いたときに自動で動き出す�
 
 ## いまの状態
 
-バージョンは **v1.0.0-alpha.1**（アルファ版）で、その後の変更（ルームなど）は `main` に入っています（[CHANGELOG](CHANGELOG.md) の「未リリース」）。動作は Linux 上の実物の Codex CLI 0.166.0 と Claude Code 2.1.316 で確かめています。**Windows ではまだ動かしていません。**
+バージョンは **v1.0.0-alpha.1**（アルファ版）で、その後の変更（ルームなど）は `main` に入っています（[CHANGELOG](CHANGELOG.md) の「未リリース」）。動作は Linux 上の実物の Codex CLI 0.166.0、Claude Code 2.1.316、Pi 1.5.0 で確かめています。**Windows ではまだ動かしていません。**
 
 | 段階 | 状態 |
 |---|---|
 | 受信経路の検証（PoC） | ✅ 実物の Codex と Claude で、合格条件をすべて満たした（[記録](docs/verification/poc-20261031.md)） |
-| 本実装 | ✅ ブローカー・MCP ブリッジ・WebUI。自動試験 26 件すべて合格 |
+| 本実装 | ✅ ブローカー・MCP ブリッジ・WebUI・Pi 拡張機能。自動試験 29 件すべて合格 |
 | 統括運用のデモ | ✅ 統括が4人の担当に振り分け、開発を完了して報告した（[記録](docs/verification/demo-20261031.md)。ルームを入れる前の版での記録） |
 | ルーム・担当の入れ替え | ✅ 実物の Codex と Claude で、ルームの作成・参加・やり取り・移動・削除と、Codex ⇔ Claude の入れ替えを確かめた |
 | レビュー試験 | ✅ 統括の Codex と2人のレビュアー（Claude）が、ルームの中でコードレビューを分担し、レポートにまとめた。出た指摘は修正済み |
+| Pi の参加 | ✅ 実物の Pi（Haiku）で、参加・自動受信の確認・自動での受信と返信・作業中に届いたものの後回し・中断のあとの再通知・`/new` のあとの参加し直しを確かめた（[記録](docs/verification/pi-20261102.md)） |
 | これから | ⏳ Windows での動作確認、ユーザーの既存の5セッションでの目的達成試験、承認待ちの検知（[ROADMAP](docs/ROADMAP.md)） |
 
 要件ごとの達成状況は [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) にあります。

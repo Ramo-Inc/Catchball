@@ -3,6 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { request as httpRequest } from 'node:http';
+import { createServer as createNetServer, createConnection } from 'node:net';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -604,6 +605,76 @@ test('設定：型や範囲が正しくなければ、項目を書いて止ま�
   writeFileSync(join(h, 'config.json'), JSON.stringify({ codex: { command: 'codex' } }));
   assert.throws(() => execFileSync(process.execPath, [join(ROOT, 'dist/cli/admin.js'), 'status'], { env: { ...process.env, SESSION_MAIL_HOME: h }, encoding: 'utf8', stdio: 'pipe' }),
     e => /codex\.command/.test(e.stderr));
+});
+
+// Pi の拡張機能の受け口（Pi のプロセス番号で決まる場所）。ブリッジの親はこの試験のプロセスなので、自分の番号で開く
+const piSocketPath = pid => process.platform === 'win32' ? `\\\\.\\pipe\\catchball-pi-${pid}` : join(tmpdir(), `catchball-pi-${pid}.sock`);
+function openPiSocket() {
+  const lines = [];
+  const srv = createNetServer(conn => {
+    let buf = '';
+    conn.on('data', d => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { lines.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); } });
+  });
+  return new Promise(r => srv.listen(piSocketPath(process.pid), () => r({ lines, close: () => new Promise(c => srv.close(c)) })));
+}
+const startPi = async onChannel => {
+  const e = { ...env };
+  delete e.SESSION_MAIL_PROVIDER; delete e.SESSION_MAIL_TOKEN_FILE;
+  const t = new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'dist/bridge/main.js')], env: e, stderr: 'pipe' });
+  const c = new Client({ name: 'pi', version: '1.5.0' });
+  c.fallbackNotificationHandler = async n => { if (n.method === 'notifications/claude/channel') onChannel?.(n.params); };
+  await c.connect(t); clients.push(c); return c;
+};
+
+test('Pi：会話 ID なしで参加し、通知は本文なしで拡張機能の受け口に届き、受信で確認済みになる', async () => {
+  const sock = await openPiSocket();
+  try {
+    const channel = [];
+    const pi = await startPi(p => channel.push(p));
+    const j = JSON.parse((await pi.callTool({ name: 'channel_join', arguments: { display_name: 'Pi 担当', role: '試験', room: 'r1', agent_id: 'pi1' } })).content[0].text);
+    assert.equal(j.agent_id, 'pi1', 'Pi は会話 ID なしで参加できる');
+    const probe = await until(() => sock.lines[0], 20000, 'Pi への probe');
+    assert.match(probe.content, /接続確認/);
+    await pi.callTool({ name: 'channel_receive', arguments: {} });
+    const me = JSON.parse((await pi.callTool({ name: 'channel_members', arguments: {} })).content[0].text).members.find(m => m.id === 'pi1');
+    assert.equal(me.auto_receive, 'verified');
+
+    await A('cl1', 'join', { display_name: '設計レビュアー', role: 'API と DB 設計のレビュー' });  // この試験だけ実行したときのため
+    assert.equal((await A('cl1', 'send', { to: 'pi1', body: 'Pi への本文ひみつ', client_message_id: 'cl1-pi-1' })).status, 200);
+    const notice = await until(() => sock.lines[1], 20000, 'Pi への新着の通知');
+    assert.doesNotMatch(notice.content, /本文ひみつ/, '通知に本文を入れない');
+    assert.match(notice.content, /cl1/);
+    assert.equal(channel.length, 0, 'Pi には claude/channel の通知を送らない');
+    const got = JSON.parse((await pi.callTool({ name: 'channel_receive', arguments: {} })).content[0].text);
+    assert.equal(got.messages[0].body, 'Pi への本文ひみつ');
+    await pi.callTool({ name: 'channel_leave', arguments: { confirm: true } });  // 後の試験の受け口に通知を書かないように
+  } finally { await sock.close(); }
+});
+
+test('Pi：拡張機能の受け口がなければ、通知は失敗として記録され、理由が分かる', async () => {
+  const pi = await startPi();
+  await pi.callTool({ name: 'channel_join', arguments: { display_name: 'Pi 担当2', role: '試験', room: 'r1', agent_id: 'pi2' } });
+  const line = await until(() => admin('status', '--room', 'r1').split('\n').find(l => /\spi2\s/.test(l) && /通知エラー/.test(l)), 25000, '受け口がないときの通知の失敗');
+  assert.match(line, /Pi の拡張機能の受け口に書けません/);
+  await pi.callTool({ name: 'channel_leave', arguments: { confirm: true } });  // 送り直しが、後の試験の受け口に届かないように
+});
+
+test('Pi 拡張機能：開始で受け口を開き、届いた通知を会話に入れ、終了で閉じる', async () => {
+  const handlers = {}, sent = [];
+  const fakePi = { on: (ev, fn) => { (handlers[ev] ??= []).push(fn); }, sendMessage: (m, o) => sent.push([m, o]) };
+  const emit = async ev => { for (const fn of handlers[ev] ?? []) await fn({ reason: 'startup' }, {}); };
+  (await import(join(ROOT, 'integrations/pi/catchball.js'))).default(fakePi);
+  await emit('session_start');
+  await emit('session_start');   // Pi は同じ拡張機能に2回送ることがある
+  const write = text => new Promise((res, rej) => { const c = createConnection(piSocketPath(process.pid)); c.on('error', rej); c.on('connect', () => c.end(text, res)); });
+  await write(JSON.stringify({ content: '[session_mail] 未取得が1件あります' }) + '\n');
+  await until(() => sent.length === 1, 3000, '会話に入る');
+  assert.deepEqual(sent[0], [{ customType: 'catchball', content: '[session_mail] 未取得が1件あります', display: true }, { triggerTurn: true, deliverAs: 'followUp' }]);
+  fakePi.sendMessage = () => { throw new Error('stale'); };   // 切り替えの途中などで pi が使えなくても、例外を Pi に漏らさない
+  await write(JSON.stringify({ content: 'x' }) + '\n');
+  await sleep(200);
+  await emit('session_shutdown');
+  await assert.rejects(write('x\n'), '終了したら受け口は閉じる');
 });
 
 test('ドキュメント：docs/MCP_TOOLS.md が実際のツールと必須の引数をすべて説明している', async () => {

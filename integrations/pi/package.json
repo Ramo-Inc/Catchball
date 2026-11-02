@@ -1,0 +1,7 @@
+{
+  "name": "catchball-pi",
+  "private": true,
+  "description": "Catchball（session_mail）の通知を Pi の会話に入れる拡張機能",
+  "type": "module",
+  "pi": { "extensions": ["./catchball.js"] }
+}
