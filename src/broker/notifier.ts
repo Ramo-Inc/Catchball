@@ -93,13 +93,13 @@ export class Notifier {
     const db = this.core.db;
     const failed = result === 'failed' || result === 'error';
     db.tx(() => {
-      const ns = db.get('SELECT * FROM notify_state WHERE pid = ?', pid)!;
+      const ns = db.get('SELECT * FROM notify_state WHERE pid = ?', pid);
+      if (!ns) return;  // 通知の途中で、ルームごと削除された
       const failures = failed ? ns.consecutive_failures + 1 : 0;
       db.run(`UPDATE notify_state SET last_notify_at = ?, last_notify_reason = COALESCE(?, last_notify_reason), last_notify_result = ?, last_notify_error = ?,
         consecutive_failures = ?, renotify_streak = renotify_streak + ? ${failed ? ', outstanding_notify_id = NULL' : ''} WHERE pid = ?`,
         this.core.now(), reason, failed ? 'failed' : result, error, failures, reason === 'renotify' ? 1 : 0, pid);
-      const p = this.core.byPid(pid);
-      if (!p) return;  // 記録の前にルームごと削除された
+      const p = this.core.byPid(pid)!;
       if (failed && failures >= this.core.cfg.notify.failing_after_consecutive_failures) {
         db.run("UPDATE participants SET receiver_state = 'failing', receiver_detail = ? WHERE pid = ?", error ?? '通知の書き込みに失敗', pid);
       } else if (!failed && p.receiver_state === 'failing') {

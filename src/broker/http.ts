@@ -121,7 +121,7 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
     },
     'POST /api/ui/logout': c => { c.res.setHeader('Set-Cookie', 'sm_ui=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'); return { ok: true }; },
     'GET /api/health': c => { ui(c); return { ok: true, now: core.now(), max_seq: core.maxSeq() }; },
-    'GET /api/ui/rooms': c => { ui(c); return { rooms: core.listRooms().rooms.map(r => ({ room: r.room, created_at: r.created_at })) }; },
+    'GET /api/ui/rooms': c => { ui(c); return { rooms: core.db.all('SELECT room_id AS room, created_at FROM rooms ORDER BY room_id') }; },
     'GET /api/members': c => {
       ui(c);
       const room = core.requireRoom(c.url.searchParams.get('room') ?? undefined);

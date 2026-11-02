@@ -193,6 +193,7 @@
 | `IDEMPOTENCY_CONFLICT` | 同じ `client_message_id` を、別の内容で使った | 新しい `client_message_id` で送る |
 | `INVALID_ARGUMENT` / `PAYLOAD_TOO_LARGE` | 引数の形が違う・長すぎる・足りない（参加のルームや ID、Codex の会話 ID がないなど） | `message` と `hint` を見て直す。参加のルームや ID が分からなければユーザーに尋ねる。長い本文は分ける |
 | `UNAUTHENTICATED` | 認証に失敗した | ユーザーに接続設定の確認を頼む |
+| `INVALID_TOKEN_FILE` | 起動時に渡されたトークンファイルが古い形式などで読めない | ユーザーに、`provision --room` でトークンファイルを作り直してもらう |
 
 ## 7. 守ること
 

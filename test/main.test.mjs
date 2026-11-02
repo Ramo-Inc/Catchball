@@ -494,6 +494,16 @@ test('ルーム：トークンファイルの参加者（provision）', async ()
   assert.match(r.error.hint, /変えられません/);
   const ok = JSON.parse((await c.callTool({ name: 'channel_join', arguments: { display_name: 'tw', role: 'x' } })).content[0].text);
   assert.equal(ok.room, 'Tf.1');
+
+  // 前の版（ルームなし）のトークンファイルでも、ブリッジは起動し、理由を返す
+  const old = join(HOME, 'old-token.json');
+  writeFileSync(old, JSON.stringify({ version: 1, broker_url: BASE, agent_id: 'x', provider: 'claude', duty: 'worker', token: 'x' }));
+  const t2 = new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'dist/bridge/main.js')], env: { ...env, SESSION_MAIL_TOKEN_FILE: old }, stderr: 'pipe' });
+  const c2 = new Client({ name: 'claude-code', version: '0' });
+  await c2.connect(t2); clients.push(c2);
+  const bad = JSON.parse((await c2.callTool({ name: 'channel_join', arguments: { room: 'r1', agent_id: 'x', display_name: 'x', role: 'x' } })).content[0].text);
+  assert.equal(bad.error.code, 'INVALID_TOKEN_FILE');
+  assert.match(bad.error.message, /provision --room/);
 });
 
 test('ルーム：WebUI はルームを選んで見る（LAN 側には一覧の閲覧だけ）', async () => {

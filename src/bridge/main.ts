@@ -17,7 +17,11 @@ import { COMMON_GUIDE } from '../shared/text.js';
 
 // バージョンは package.json を正とする（dist/bridge/main.js から2つ上）
 const VERSION: string = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8')).version;
-let bound: TokenFile | null = readTokenFile(process.env.SESSION_MAIL_TOKEN_FILE);
+// トークンファイルが古い形式などで読めないときは、起動は続け、channel_join でその理由を返す
+let tokenFileError: string | null = null;
+let bound: TokenFile | null = (() => {
+  try { return readTokenFile(process.env.SESSION_MAIL_TOKEN_FILE); } catch (e) { tokenFileError = (e as Error).message; return null; }
+})();
 const logErr = (m: string) => process.stderr.write(`[session-mail-bridge ${bound?.agent_id ?? 'unbound'}] ${m}\n`);
 
 const server = new McpServer(
@@ -87,6 +91,9 @@ server.registerTool('channel_join', {
     coordinator: z.boolean().optional().describe('統括として参加するなら true'),
   },
 }, async a => {
+  if (tokenFileError) {
+    return result({ error: { code: 'INVALID_TOKEN_FILE', message: tokenFileError, hint: 'ユーザーに、トークンファイルを作り直してもらってください。' } }, true);
+  }
   if (bound) {
     if ((a.agent_id && a.agent_id !== bound.agent_id) || (a.room && a.room !== bound.room)) {
       return result({ error: { code: 'INVALID_ARGUMENT', message: `このセッションはルーム ${bound.room} に ${bound.agent_id} として参加済みです。`,
@@ -137,11 +144,12 @@ server.registerTool('channel_leave', {
   // 会話の中から参加したブリッジは、退出したら参加していない状態に戻る（同じセッションのまま、別のルームに入れるように）
   if (!r.isError && !tokenFileMode && bound) {
     if (beating) await beating;
-    const was = bound;
-    if (generation > 0) await call(was, 'POST', '/api/agent/disconnect', { generation });
+    // 先に参加していない状態にしてから切断を伝える（待っている間にハートビートが走り、接続中に戻らないように）
+    const was = bound, gen = generation;
     bound = null;
     generation = 0;
     results = [];
+    if (gen > 0) await call(was, 'POST', '/api/agent/disconnect', { generation: gen });
     logErr(`left ${was.room}`);
   }
   return r;

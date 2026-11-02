@@ -467,8 +467,9 @@ export class Core {
     if (rows.length === 0) return [];
     const ids = rows.map(r => r.message_id);
     const ds = this.db.all(`SELECT * FROM deliveries WHERE message_id IN (${ids.map(() => '?').join(',')}) ORDER BY recipient_id`, ...ids);
-    const ps = new Map(this.db.all(`SELECT * FROM participants WHERE room_id IN (${[...new Set(rows.map(r => r.room_id))].map(() => '?').join(',')})`,
-      ...new Set(rows.map(r => r.room_id))).map(p => [p.pid as number, p]));
+    const roomIds = [...new Set(rows.map(r => r.room_id))];
+    const ps = new Map(this.db.all(`SELECT * FROM participants WHERE room_id IN (${roomIds.map(() => '?').join(',')})`, ...roomIds)
+      .map(p => [p.pid as number, p]));
     return rows.map(m => {
       const views = ds.filter(d => d.message_id === m.message_id).map(d => this.deliveryView(d, ps.get(d.recipient_pid)!));
       const first = views.find(v => v.state === 'pending');
