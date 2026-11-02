@@ -43,7 +43,7 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
 
   const agent = (c: Ctx) => {
     const a = core.agentFromToken(c.token);
-    core.lastToolAt.set(a.agent_id, core.now());
+    core.markToolUse(a.pid);
     return a;
   };
   const ui = (c: Ctx) => core.verify(c.cookie, 'ui_session');
