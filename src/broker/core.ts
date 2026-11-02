@@ -1,4 +1,4 @@
-// 業務処理（DESIGN §4）：参加・送信・受信・ACK・接続・表示用の集計
+// 業務処理（DESIGN §4）：参加・送信・受信（取得したら既読）・接続・表示用の集計
 import { Db, Row } from './db.js';
 import { Config, Duty, Provider } from '../shared/config.js';
 import { newMessageId, newToken, parseToken, safeEqualHex, sha256 } from '../shared/ids.js';
@@ -262,7 +262,7 @@ export class Core {
     };
   }
 
-  // ---- 受信・ACK --------------------------------------------------------------
+  // ---- 受信（本文を返した時点で既読にする。D-016） -----------------------------
 
   receive(agent: Row, rawLimit: unknown) {
     const limit = Math.min(Math.max(Number(rawLimit) || this.cfg.limits.receive_default, 1), this.cfg.limits.receive_max);
@@ -272,8 +272,8 @@ export class Core {
         FROM deliveries d JOIN messages m USING (message_id) WHERE d.recipient_id = ? AND d.state = 'pending' ORDER BY d.created_seq LIMIT ?`, p.agent_id, limit);
       const now = this.now();
       for (const r of rows) {
-        this.db.run('UPDATE deliveries SET first_received_at = COALESCE(first_received_at, ?), last_received_at = ?, receive_count = receive_count + 1 WHERE message_id = ? AND recipient_id = ?',
-          now, now, r.message_id, p.agent_id);
+        this.db.run(`UPDATE deliveries SET state = 'acked', acked_at = ?, first_received_at = COALESCE(first_received_at, ?), last_received_at = ?,
+          receive_count = receive_count + 1 WHERE message_id = ? AND recipient_id = ?`, now, now, now, r.message_id, p.agent_id);
         this.db.run('UPDATE messages SET updated_seq = ? WHERE message_id = ?', this.db.nextSeq(), r.message_id);
       }
       const ns = this.db.get('SELECT * FROM notify_state WHERE agent_id = ?', p.agent_id)!;
@@ -283,34 +283,17 @@ export class Core {
       const maxSeq = (this.db.get("SELECT COALESCE(MAX(created_seq), 0) s FROM deliveries WHERE recipient_id = ? AND state = 'pending'", p.agent_id) as Row).s;
       this.db.run(`UPDATE notify_state SET outstanding_notify_id = NULL, outstanding_since = NULL, renotify_streak = 0, last_receive_at = ?,
         known_seq = MAX(known_seq, ?) WHERE agent_id = ?`, now, maxSeq, p.agent_id);
-      const remaining = (this.db.get("SELECT COUNT(*) n FROM deliveries WHERE recipient_id = ? AND state = 'pending'", p.agent_id) as Row).n - rows.length;
+      const remaining = (this.db.get("SELECT COUNT(*) n FROM deliveries WHERE recipient_id = ? AND state = 'pending'", p.agent_id) as Row).n;
       return {
         messages: rows.map(r => ({
           message_id: r.message_id, from: { id: r.sender_id, display_name: r.sender_display_name }, kind: r.kind, to: r.to_spec,
           reply_to: r.reply_to, created_at: r.m_created_at, created_at_iso: new Date(r.m_created_at).toISOString(),
-          receive_count: r.receive_count + 1, body: r.body,
+          body: r.body,
         })),
         remaining,
         members: this.members(p.agent_id),
       };
     });
-  }
-
-  ack(agent: Row, raw: unknown) {
-    if (!Array.isArray(raw) || raw.length < 1 || raw.length > 100) throw new ApiError('INVALID_ARGUMENT', 400, 'message_ids は1〜100件の配列で指定してください。');
-    return this.db.tx(() => ({
-      results: raw.map(x => {
-        const id = String(x);
-        const d = this.db.get('SELECT state FROM deliveries WHERE message_id = ? AND recipient_id = ?', id, agent.agent_id);
-        if (!d) return { message_id: id, error: 'NOT_FOUND' };
-        if (d.state === 'pending') {
-          this.db.run("UPDATE deliveries SET state = 'acked', acked_at = ? WHERE message_id = ? AND recipient_id = ?", this.now(), id, agent.agent_id);
-          this.db.run('UPDATE messages SET updated_seq = ? WHERE message_id = ?', this.db.nextSeq(), id);
-          return { message_id: id, state: 'acked' };
-        }
-        return { message_id: id, state: d.state, already: d.state === 'acked' };
-      }),
-    }));
   }
 
   // ---- 接続 -------------------------------------------------------------------
@@ -383,7 +366,6 @@ export class Core {
     else if (p.activity_state === 'awaiting_approval') detail = '未取得（承認待ちのため通知を保留中）';
     else if (p.activity_state === 'interrupted') detail = '未取得（中断後のため停止中）';
     else if (p.receiver_state === 'failing' || d.last_notify_result === 'failed') { ui_state = 'attention'; detail = `要確認（通知に失敗：${p.receiver_detail ?? '詳細不明'}）`; }
-    else if (d.first_received_at) detail = '未取得（本文取得済み・ACK待ち）';
     else if (d.last_notify_at && this.now() - d.last_notify_at > this.cfg.notify.attention_after_ms) {
       ui_state = 'attention'; detail = `要確認（通知後${Math.round((this.now() - d.last_notify_at) / 60000)}分、受信を確認できません）`;
     } else if (d.last_notify_at) detail = '未取得（通知済み・受信待ち）';

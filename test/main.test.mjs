@@ -100,18 +100,23 @@ test('send：個別・全員・宛先の確定・冪等性・各種エラー', a
   assert.ok(view.data.messages.every(m => m.from.id === 'main'), 'from を偽っても送信者はトークンの主になる');
 });
 
-test('receive / ack：自分宛てだけ・他人の ACK は効かない・reply_to', async () => {
+test('receive：自分宛てだけ・取得したら既読で二度は返らない・reply_to', async () => {
   const sub = await A('sub1', 'receive', {});
   assert.ok(sub.data.messages.every(m => m.to === 'all' || m.to === 'sub1'), '他人の受信箱が混ざらない');
-  const clMsgs = (await A('cl1', 'receive', {})).data.messages;
-  const req1 = clMsgs.find(m => m.body.startsWith('[依頼 T-01]'));
-  assert.ok(req1.receive_count >= 2, '再取得は receive_count で分かる');
-  assert.equal((await A('sub1', 'ack', { message_ids: [req1.message_id] })).data.results[0].error, 'NOT_FOUND');
-  assert.equal((await A('cl1', 'ack', { message_ids: [req1.message_id] })).data.results[0].state, 'acked');
-  assert.equal((await A('cl1', 'ack', { message_ids: [req1.message_id] })).data.results[0].already, true);
-  const rep = await A('cl1', 'send', { to: 'main', body: '[受領 T-01] 着手します', client_message_id: 'cl1-T01-ack', reply_to: req1.message_id });
+  await A('main', 'send', { to: 'cl1', body: '[依頼 T-02] 1件目', client_message_id: 'main-T02-req' });
+  await A('main', 'send', { to: 'cl1', body: '[依頼 T-03] 2件目', client_message_id: 'main-T03-req' });
+  const r1 = await A('cl1', 'receive', { limit: 1 });
+  assert.deepEqual(r1.data.messages.map(m => m.body), ['[依頼 T-02] 1件目']);
+  assert.equal(r1.data.remaining, 1, 'remaining は、まだ返していない件数');
+  const r2 = await A('cl1', 'receive', {});
+  assert.deepEqual(r2.data.messages.map(m => m.body), ['[依頼 T-03] 2件目'], '一度返したものは二度返らない');
+  assert.equal(r2.data.remaining, 0);
+  assert.equal((await A('cl1', 'receive', {})).data.messages.length, 0);
+  assert.equal((await A('cl1', 'ack', { message_ids: [r1.data.messages[0].message_id] })).status, 404, 'ACK の API はない（取得で既読）');
+  const req2 = r1.data.messages[0];
+  const rep = await A('cl1', 'send', { to: 'main', body: '[受領 T-02] 着手します', client_message_id: 'cl1-T02-ack', reply_to: req2.message_id });
   assert.equal(rep.status, 200);
-  assert.equal((await A('sub1', 'send', { to: 'main', body: 'x', client_message_id: 'bad-reply', reply_to: req1.message_id })).data.error.code, 'INVALID_REPLY_TO');
+  assert.equal((await A('sub1', 'send', { to: 'main', body: 'x', client_message_id: 'bad-reply', reply_to: req2.message_id })).data.error.code, 'INVALID_REPLY_TO');
 });
 
 test('leave：未取得は配送停止、以後は送れない、再 join しても戻らない', async () => {
@@ -136,7 +141,8 @@ test('認証と HTTP の安全策', async () => {
   assert.doesNotMatch(readFileSync(join(ROOT, 'src/web/app.js'), 'utf8'), /innerHTML/, '本文を HTML として扱わない');
 });
 
-test('WebUI：ログイン、一覧、ACK による更新を増分で取りこぼさない', async () => {
+test('WebUI：ログイン、一覧、取得（既読）による更新を増分で取りこぼさない', async () => {
+  const pend = await A('main', 'send', { to: 'sub1', body: '[状況] 確認用', client_message_id: 'main-ui-1' });
   const viewer = readFileSync(join(HOME, 'tokens', 'viewer.token'), 'utf8').trim();
   const login = await req('POST', '/api/ui/login', { body: { token: viewer }, origin: BASE });
   assert.equal(login.status, 200);
@@ -145,17 +151,17 @@ test('WebUI：ログイン、一覧、ACK による更新を増分で取りこ�
   assert.ok(first.data.messages.length >= 4);
   const bc = first.data.messages.find(m => m.kind === 'broadcast');
   assert.equal(bc.summary.total, 2, '全員送信は投稿1件・宛先2件');
-  const sub = await A('sub1', 'receive', {});
-  await A('sub1', 'ack', { message_ids: sub.data.messages.map(m => m.message_id).concat([bc.message_id]) });
+  assert.equal(first.data.messages.find(m => m.message_id === pend.data.message_id).deliveries[0].state, 'pending');
+  await A('sub1', 'receive', {});
   const inc = await req('GET', `/api/messages?since_seq=${first.data.max_seq}`, { cookie });
-  const upd = inc.data.messages.find(m => m.message_id === bc.message_id);
-  assert.ok(upd, 'ACK で変わった投稿が増分に含まれる');
+  const upd = inc.data.messages.find(m => m.message_id === pend.data.message_id);
+  assert.ok(upd, '取得で変わった投稿が増分に含まれる');
   assert.ok(upd.deliveries.find(d => d.recipient_id === 'sub1').state === 'acked');
   const mem = await req('GET', '/api/members', { cookie });
   assert.equal(mem.data.members.length, 4);
 });
 
-test('MCP ブリッジ：6ツール、Claude には channel 通知、Codex には codex queue', async () => {
+test('MCP ブリッジ：5ツール、Claude には channel 通知、Codex には codex queue', async () => {
   const start = async (id, provider, onChannel) => {
     const t = new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'dist/bridge/main.js')],
       env: { ...env, SESSION_MAIL_TOKEN_FILE: join(HOME, 'tokens', `${id}.json`) }, stderr: 'pipe' });
@@ -163,10 +169,11 @@ test('MCP ブリッジ：6ツール、Claude には channel 通知、Codex に�
     c.fallbackNotificationHandler = async n => { if (n.method === 'notifications/claude/channel') onChannel?.(n.params); };
     await c.connect(t); clients.push(c); return c;
   };
+  await A('main', 'send', { to: 'cl1', body: '[依頼 T-04] 接続前に届いた依頼', client_message_id: 'main-T04-req' });
   const events = [];
   const cl = await start('cl1', 'claude', p => events.push(p));
   const cx = await start('sub1', 'codex');
-  assert.deepEqual((await cl.listTools()).tools.map(t => t.name).sort(), ['channel_ack', 'channel_join', 'channel_leave', 'channel_members', 'channel_receive', 'channel_send']);
+  assert.deepEqual((await cl.listTools()).tools.map(t => t.name).sort(), ['channel_join', 'channel_leave', 'channel_members', 'channel_receive', 'channel_send']);
   assert.ok(cl.getServerCapabilities().experimental['claude/channel']);
   assert.equal(cl.getServerCapabilities().experimental['claude/channel/permission'], undefined);
   assert.match(cl.getInstructions(), /承認を代行・突破しません/);
@@ -176,7 +183,8 @@ test('MCP ブリッジ：6ツール、Claude には channel 通知、Codex に�
   assert.equal(ev.meta.kind, 'mail_notice');
   assert.match(ev.content, /channel_receive/);
   const r = JSON.parse((await cl.callTool({ name: 'channel_receive', arguments: {} })).content[0].text);
-  await cl.callTool({ name: 'channel_ack', arguments: { message_ids: r.messages.map(m => m.message_id) } });
+  assert.ok(r.messages.length >= 1);
+  assert.equal(JSON.parse((await cl.callTool({ name: 'channel_receive', arguments: {} })).content[0].text).messages.length, 0, '取得したものは既読になる');
 
   const before = queueCalls().length;
   const sent = JSON.parse((await cl.callTool({ name: 'channel_send', arguments: { to: 'sub1', body: '[質問] 確認です', client_message_id: 'cl1-q-1' } })).content[0].text);

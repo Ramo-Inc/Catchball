@@ -82,7 +82,6 @@ export function createBroker(core: Core, notifier: Notifier, log: (s: string) =>
     'GET /api/agent/members': c => { const a = agent(c); return { channel_id: core.cfg.channel_id, self_id: a.agent_id, members: core.members(a.agent_id) }; },
     'POST /api/agent/send': c => core.send(agent(c), c.body),
     'POST /api/agent/receive': c => core.receive(agent(c), c.body.limit),
-    'POST /api/agent/ack': c => core.ack(agent(c), c.body.message_ids),
     'POST /api/agent/leave': c => {
       if (c.body.confirm !== true) throw new ApiError('INVALID_ARGUMENT', 400, '退出するには confirm: true を指定してください。');
       return core.leave(agent(c));
