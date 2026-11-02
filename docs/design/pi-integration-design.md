@@ -17,7 +17,7 @@
 | 接続名 | MCP の `clientInfo.name` は `pi` | `packages/coding-agent/src/extensions/mcp/runtime.ts` |
 | サーバーからの通知 | 受け手があるのは、ログ（`notifications/message`）とツール一覧の変更だけ。**それ以外は捨てる**。拡張機能に通知を渡す口もない | `packages/mcp/src/client.ts`（`handleNotification`）、`runtime.ts` |
 | 会話への差し込み | `pi.sendMessage(message, { triggerTurn, deliverAs })`。待機中は `triggerTurn: true` ですぐ動き出す。作業中は `followUp` なら作業がすべて終わってから処理される | docs/extensions.md「pi.sendMessage」 |
-| ツールの前の割り込み | `tool_call` のイベントで、実行の前に止められる（`{ block: true, reason }`）。`ctx.ui.confirm` で確認を出せる。`ctx.hasUI` は TUI と RPC で true、`-p` と JSON で false | docs/extensions.md「tool_call」「ctx.hasUI」 |
+| ツールの前の割り込み | `tool_call` のイベントで、実行の前に止められる（`{ block: true, reason }`）。`ctx.ui.confirm` で確認を出せる | docs/extensions.md「tool_call」 |
 | 長く動く資源 | ソケットなどは、読み込みの時点ではなく `session_start` で始め、`session_shutdown` で閉じる | docs/extensions.md「Long-lived resources and shutdown」 |
 | 入れ方 | `pi install <パス>`、設定の `packages`・`extensions`、起動時の `-e <パス>`。.js をそのまま読み込む | docs/packages.md、docs/extensions.md |
 | 承認 | ツールを呼ぶたびの承認はない | docs/security.md |
@@ -125,9 +125,8 @@ flowchart LR
   - 最初の1行が `hello` で、合言葉が合う接続だけを受け付ける。合わなければ切る。
   - `notify` が届いたら、`pi.sendMessage({ customType: "catchball", content, display: true }, { triggerTurn: true, deliverAs: "followUp" })` を呼ぶ。例外がなければ `written`、あれば `error` を返す。
 - **`tool_call`**
-  - `mcp__session_mail__channel_leave` と `mcp__session_mail__channel_room_delete` のときだけ、`ctx.hasUI` なら `ctx.ui.confirm` で聞く。
+  - `mcp__session_mail__channel_leave` と `mcp__session_mail__channel_room_delete` のときだけ、`ctx.ui.confirm` で聞く。
   - 断られたら `{ block: true, reason: "ユーザーが断りました。ユーザーの指示を待ってください。" }` を返す。
-  - UI がないときは、仕様書 §7 で決める。
 - **`session_shutdown`**：受け口を閉じ、フォルダーを消す。2回呼ばれても問題がないようにする。
 - `/reload` などで `session_start` がもう一度来たら、前の受け口を閉じてから開き直し、登録し直す。ブリッジは起動し直されるので、会話の中から参加していた場合は参加し直しになる。今の「MCP サーバーの再起動」と同じ扱い。
 
