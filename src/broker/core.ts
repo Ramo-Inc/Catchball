@@ -33,8 +33,8 @@ const roomNotFound = (room: string, hint?: string) => new ApiError('ROOM_NOT_FOU
 export class Core {
   // 接続状態はメモリで持つ（REVIEW-2 N4）。起動直後は全員 offline。鍵は参加者の番号（pid）
   private lastSeen = new Map<number, number>();
-  // Codex 向けの通知を遅らせる判断に使う（PoC R2）
-  readonly lastToolAt = new Map<number, number>();
+  // Codex 向けの通知を遅らせる判断に使う（PoC R2）。鍵は参加者の番号。書くのは markToolUse だけにして、鍵の取り違えを型で防ぐ
+  private readonly lastToolAt = new Map<number, number>();
   onSent: (recipients: string[]) => void = () => {};
 
   constructor(readonly db: Db, readonly cfg: Config, readonly now: () => number = Date.now) {
@@ -210,6 +210,9 @@ export class Core {
   participantIn(room: string, agentId: string): Row | undefined {
     return this.db.get('SELECT * FROM participants WHERE room_id = ? AND agent_id = ?', room, agentId);
   }
+
+  markToolUse(pid: number): void { this.lastToolAt.set(pid, this.now()); }
+  lastToolUse(pid: number): number { return this.lastToolAt.get(pid) ?? 0; }
 
   isOnline(p: Row): boolean {
     const t = this.lastSeen.get(p.pid);

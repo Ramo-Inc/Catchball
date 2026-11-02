@@ -42,7 +42,7 @@ export class Notifier {
       else if (p.provider === 'claude' && ns.outstanding_notify_id && ns.last_notify_at
         && now >= ns.last_notify_at + cfg.claude_renotify_backoff_ms[Math.min(ns.renotify_streak, cfg.claude_renotify_backoff_ms.length - 1)]) reason = 'renotify';
       if (!reason) continue;
-      if (reason === 'new' && p.provider === 'codex' && now - (this.core.lastToolAt.get(p.pid) ?? 0) < cfg.codex_quiet_after_tool_ms) continue;
+      if (reason === 'new' && p.provider === 'codex' && now - this.core.lastToolUse(p.pid) < cfg.codex_quiet_after_tool_ms) continue;
       void this.dispatch(p, reason, pend.n, pend.max_seq);
     }
   }
