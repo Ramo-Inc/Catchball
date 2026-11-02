@@ -12,7 +12,7 @@ import { safeEqualHex, sha256 } from '../shared/ids.js';
 
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
 const UI_SESSION_TTL = 7 * 24 * 3600 * 1000;
-const CSP = "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 type Ctx = { req: IncomingMessage; res: ServerResponse; url: URL; body: any; token?: string; cookie?: string };
 
