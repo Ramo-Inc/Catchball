@@ -55,6 +55,17 @@ export class Core {
       ...[this.now(), reason, kind, ...(pid !== null ? [pid] : [])]);
   }
 
+  // 1つのトークンだけを失効させる（WebUI のログアウト）。形が違う・見つからないときは何もしない
+  revokeToken(token: string, kind: string, reason: string): void {
+    const parsed = parseToken(token);
+    if (parsed) this.db.run('UPDATE credentials SET revoked_at = ?, revoked_reason = ? WHERE credential_id = ? AND kind = ? AND revoked_at IS NULL', this.now(), reason, parsed.credentialId, kind);
+  }
+
+  // 期限切れ・失効済みの記録を消す（WebUI のログインのたびに増えていくため）
+  purgeExpired(kind: 'ui_session'): void {
+    this.db.run('DELETE FROM credentials WHERE kind = ? AND ((expires_at IS NOT NULL AND expires_at < ?) OR revoked_at IS NOT NULL)', kind, this.now());
+  }
+
   verify(token: string | undefined, kind: string): Row {
     const parsed = token ? parseToken(token) : null;
     const c = parsed ? this.db.get('SELECT * FROM credentials WHERE credential_id = ?', parsed.credentialId) : undefined;

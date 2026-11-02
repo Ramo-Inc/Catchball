@@ -169,6 +169,10 @@ node dist/cli/admin.js provision --room proj-a --agent claude-1 --provider claud
 | AI が「session_mail のツールがない」と言う | MCP は**起動したときにしか読み込まれません**。登録より前に起動したセッションは、一度だけ再起動します（会話は引き継げます：Codex は `codex resume --last`、Claude は `claude --continue --dangerously-load-development-channels server:session_mail`）。Claude で `.mcp.json` を使う場合は、確認画面で「使わない」を選んでいないか確認してください（`.claude/settings.local.json` の `disabledMcpjsonServers`） |
 | 参加すると「ブローカーが起動していません」 | `serve` を起動していないか、データフォルダーが違います（Codex は §2 の `SESSION_MAIL_HOME` を確認） |
 | AI が「ルームが見つからない」と言う（`ROOM_NOT_FOUND`） | ルームの ID の打ち間違いか、まだ作っていません。大文字と小文字も区別します。一覧で確かめ、必要なら作成を頼みます |
+| AI が「参加が無効になった」と言う（`UNAUTHENTICATED`） | 同じルーム・同じ ID に別のセッションが参加したか、ルームが削除されました。続けるなら、ルームと ID を伝えて参加し直させます（起動し直す必要はありません） |
+| AI が `SESSION_SUPERSEDED` と言う | 同じトークンファイルで、セッションを2つ起動しています。使わないほうを終了し、使うほうを起動し直します |
+| ブローカーが「起動できませんでした（ポート …）」で止まる | そのポートを別のプログラムが使っています。止めるか、`config.json` の `port` を変えます |
+| 「config.json の … が正しくありません」で止まる | 書かれている項目の値を直します（数の項目は数で、配列の項目は1つ以上の値を並べて書きます） |
 | `AGENT_IN_USE` | その ID は、そのルームで別のセッションが接続中です。別の ID は使わず、前のセッションを終了させてから参加し直します（§7-2） |
 | 「自動受信 失敗（要確認）」 | `status` の通知エラーを見ます。`codex` が見つからない場合は、`config.json` の `codex.command` に codex の実体のフルパスを書きます（Windows の npm 版は `.cmd` を直接起動できません） |
 | Codex がメッセージに反応しない | Esc で作業を中断した直後の Codex は、届いた通知を自動では処理しません。何か入力すると、そのターンの後で処理されます |
